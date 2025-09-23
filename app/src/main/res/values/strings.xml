@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">SMFN</string>
+
+    <string name="discover_splash">Discover,\nconnect,\nand swap</string>
+    <string name="discover_text_splash">
+        Welcome to the community of tracers! Swap cool stuff like clothes, art, books, electronics, or home decor.
+    </string>
+
+    <string name="explore_splash">Explore \nTreasures</string>
+    <string name="explore_text_splash">
+        Discover valuable items that match your interests.
+    </string>
+
+    <string name="free_splash">Free \nExchange</string>
+    <string name="free_text_splash">
+        Swap and get what you love while saving money.
+    </string>
+</resources>
