@@ -3,19 +3,23 @@ package com.dibachain.smfn.activity.forgetpassword
 import android.app.Activity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,7 +29,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.dibachain.smfn.R
 import kotlinx.coroutines.launch
 
-// 🎨 رنگ‌ها
+// 🎨 Colors (هماهنگ با صفحات قبلی)
 private val LabelColor = Color(0xFF46557B)
 private val PlaceholderColor = Color(0xFFB5BBCA)
 private val BorderColor = Color(0xFFECEEF2)
@@ -34,107 +38,122 @@ private val ButtonGradient = listOf(Color(0xFFFFC753), Color(0xFF4AC0A8))
 
 @Composable
 fun ForgetPasswordScreen(
-    onNext: (email: String) -> Unit = {}
+    onNext: (email: String) -> Unit = {},
+    onBackToLogin: () -> Unit = {}
 ) {
-    // استاتوس‌بار سفید
     AppStatusBar(color = Color.White)
 
     var email by remember { mutableStateOf("") }
     var emailError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    fun isEmailValid(s: String) =
-        android.util.Patterns.EMAIL_ADDRESS.matcher(s).matches()
-
+    fun isEmailValid(s: String) = android.util.Patterns.EMAIL_ADDRESS.matcher(s).matches()
     fun validate(): Boolean {
-        emailError = null
-        when {
-            email.isBlank() -> emailError = "Required"
-            !isEmailValid(email) -> emailError = "Invalid email"
+        emailError = when {
+            email.isBlank() -> "Required"
+            !isEmailValid(email) -> "Invalid email"
+            else -> null
         }
         return emailError == null
     }
 
-    // کانتینر سراسری: همیشه وسط، با مارجین افقی یکسان با لاگین
-    Box(
+    val logoW = 252.dp
+    val logoH = 105.dp
+    val fieldH = 64.dp
+    val btnH   = 52.dp
+    val btnR   = 28.dp
+    val scroll = rememberScrollState()
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
             .systemBarsPadding()
-            .padding(horizontal = 24.dp)
+            .imePadding()
+            .verticalScroll(scroll)       // اسکرول امن
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+//        verticalArrangement = Arrangement.Center
     ) {
-        // کانتنت اصلی وسط صفحه
-        Column(
+
+        Image(
+            painter = painterResource(R.drawable.logo_without_text),
+            contentDescription = null,
+            modifier = Modifier
+                .width(301.dp)
+                .height(301.dp),
+            contentScale = ContentScale.Fit      // بدون اعوجاج
+        )
+            GradientTitleCentered(text = "Forget Password")
+        Spacer(Modifier.height(16.dp))
+
+
+        // فیلد ایمیل (64dp)
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // تیتر گرادیانی وسط؛ یک‌خطی
-            GradientTitleCentered(text = "Forget Password")
-
-            Spacer(Modifier.height(28.dp))
-
-            // فیلد ایمیل
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                singleLine = true,
-                label = { Text("Phone or Email", color = LabelColor, fontSize = 12.sp) },
-                placeholder = {
-                    Text(
-                        "Example: abc@example.com",
-                        color = PlaceholderColor,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                shape = RoundedCornerShape(20.dp),
-                isError = emailError != null,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
-                    unfocusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
-                    cursorColor = LabelColor,
-                    focusedLabelColor = LabelColor,
-                    unfocusedLabelColor = LabelColor,
-                    focusedTextColor = LabelColor,
-                    unfocusedTextColor = LabelColor,
-                    errorLabelColor = ErrorColor,
-                    errorCursorColor = ErrorColor,
-                    errorTextColor = LabelColor
+                .height(fieldH),
+            singleLine = true,
+            label = { Text("Email", color = LabelColor, fontSize = 12.sp) },
+            placeholder = {
+                Text(
+                    "Example: abc@example.com",
+                    color = PlaceholderColor,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+            },
+            textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
+            shape = RoundedCornerShape(20.dp),
+            isError = emailError != null,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
+                unfocusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
+                errorBorderColor = ErrorColor,
+                cursorColor = LabelColor,
+                focusedLabelColor = LabelColor,
+                unfocusedLabelColor = LabelColor,
+                focusedTextColor = LabelColor,
+                unfocusedTextColor = LabelColor,
+                errorLabelColor = ErrorColor,
+                errorCursorColor = ErrorColor,
+                errorTextColor = LabelColor
             )
+        )
+        if (emailError != null) {
+            ErrorRow(message = emailError!!)
+        }
 
-            if (emailError != null) {
-                ErrorRow(message = emailError!!)
-            }
+        Spacer(Modifier.height(16.dp))
 
-            Spacer(Modifier.height(32.dp))
-
-            // دکمه Next (گرادیانی، 48 ارتفاع، رادیوس 40)
-            GradientButton(
-                text = "Next",
-                gradient = ButtonGradient,
+        // دکمه Next (52dp / radius 28) گرادیانی
+        Button(
+            onClick = { if (validate()) scope.launch { onNext(email.trim()) } },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(btnH),
+            shape = RoundedCornerShape(btnR),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(40.dp))
+                    .fillMaxSize()
+                    .background(Brush.linearGradient(ButtonGradient), RoundedCornerShape(btnR)),
+                contentAlignment = Alignment.Center
             ) {
-                if (validate()) {
-                    scope.launch { onNext(email.trim()) }
-                }
+                Text(text = "Next", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
+
+        Spacer(Modifier.height(12.dp))
     }
 }
 
-/* ---------- اجزاء کمکی ---------- */
+/* ---------- اجزای کمکی ---------- */
 
-// تیتر گرادیانی وسط‌چین و یک‌خطی (بدون padding ثابت از بالا)
 @Composable
 private fun GradientTitleCentered(
     text: String,
@@ -157,7 +176,6 @@ private fun GradientTitleCentered(
     }
 }
 
-// پیام خطا (با آیکن اختیاری)
 @Composable
 private fun ErrorRow(message: String) {
     Row(
@@ -166,7 +184,6 @@ private fun ErrorRow(message: String) {
             .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // اگر آیکن نداری، این Image رو حذف کن یا کامنت نگه دار
         Image(
             painter = painterResource(R.drawable.ic_error),
             contentDescription = null,
@@ -178,36 +195,6 @@ private fun ErrorRow(message: String) {
     }
 }
 
-// دکمه گرادیانی گرد
-@Composable
-private fun GradientButton(
-    text: String,
-    gradient: List<Color>,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(40.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-        contentPadding = PaddingValues(0.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.linearGradient(gradient),
-                    RoundedCornerShape(40.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = text, color = Color.White, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-// استاتوس‌بار همرنگ پس‌زمینه
 @Composable
 fun AppStatusBar(color: Color) {
     val activity = LocalContext.current as Activity

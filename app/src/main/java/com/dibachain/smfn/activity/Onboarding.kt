@@ -60,7 +60,7 @@ val pages = listOf(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(
-    onFinished: () -> Unit = {}
+    onFinished:  () -> Unit = {}
 ) {
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { pages.size })
     val scope = rememberCoroutineScope()

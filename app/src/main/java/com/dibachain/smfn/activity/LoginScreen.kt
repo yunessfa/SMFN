@@ -5,23 +5,23 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +30,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.dibachain.smfn.R
 import kotlinx.coroutines.launch
 
-// رنگ‌ها
+/* ---- رنگ‌ها مثل قبل ---- */
 private val LabelColor = Color(0xFF46557B)
 private val PlaceholderColor = Color(0xFFB5BBCA)
 private val BorderColor = Color(0xFFECEEF2)
@@ -39,133 +39,78 @@ private val ButtonGradient = listOf(Color(0xFFFFC753), Color(0xFF4AC0A8))
 
 @Composable
 fun LoginScreen(
-    onLogin: (emailOrPhone: String, password: String) -> Unit = { _, _ -> },
+    onLogin:  (emailOrPhone: String, password: String) -> Unit = { _, _ -> },
     onForgotPassword: () -> Unit = {},
-    onSignUp: () -> Unit = {}
+    onSignUp: () -> Unit = {},
+    onAppleLogin: () -> Unit = {},
+    onGoogleLogin: () -> Unit = {}
 ) {
-    // استاتوس‌بار سفید با آیکن تیره
     AppStatusBarLogin(color = Color.White)
 
-    var emailOrPhone by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-//    var showPassword by remember { mutableStateOf(false) }
-
-    // خطاها
-    var emailError by remember { mutableStateOf<String?>(null) }
-    var passwordError by remember { mutableStateOf<String?>(null) }
+    var email by remember { mutableStateOf("") }
+    var pass by remember { mutableStateOf("") }
+    var emailErr by remember { mutableStateOf<String?>(null) }
+    var passErr by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val scroll = rememberScrollState()
 
-    fun isEmailValid(s: String): Boolean {
-        val pattern = android.util.Patterns.EMAIL_ADDRESS
-        return pattern.matcher(s).matches()
-    }
-
-    fun isPhone(s: String): Boolean {
-        return s.trim().replace(" ", "").let { str ->
-            str.all { it.isDigit() } && str.length >= 8
-        }
-    }
-
+    fun isEmailValid(s: String) = android.util.Patterns.EMAIL_ADDRESS.matcher(s).matches()
     fun validate(): Boolean {
-        emailError = null
-        passwordError = null
-
-        if (emailOrPhone.isBlank()) {
-            emailError = "Required"
-        } else {
-            if (emailOrPhone.contains("@")) {
-                if (!isEmailValid(emailOrPhone)) emailError = "Invalid email"
-            } else {
-                if (!isPhone(emailOrPhone)) emailError = "Invalid phone number"
-            }
-        }
-
-        if (password.length < 6) {
-            passwordError = "Password must be at least 6 characters"
-        }
-
-        return emailError == null && passwordError == null
+        emailErr = null; passErr = null
+        if (!isEmailValid(email)) emailErr = "Invalid email"
+        if (pass.length < 6)    passErr  = "Password must be at least 6 characters"
+        return emailErr == null && passErr == null
     }
 
-    // فاصله‌ی نسبی از بالا (مثلاً ~12% ارتفاع صفحه)
-    val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val topGap = (screenHeightDp * 0.12f).dp
+    // اندازه دقیق طرح
+    val logoW = 252.dp
+    val logoH = 105.dp
+    val fieldH = 64.dp
+    val btnH   = 52.dp
+    val btnR   = 28.dp
+    val horizontalPadding = 24.dp
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
+            .verticalScroll(scroll)       // اسکرول امن
             .systemBarsPadding()
             .imePadding()
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center // 👈 کل محتوا وسط صفحه
+//        verticalArrangement = Arrangement.Center
     ) {
 
-        GradientTitleCentered(text = "Login")
-
-        Spacer(Modifier.height(28.dp))
-
-        // --- فیلد: Phone or Email ---
-        OutlinedTextField(
-            value = emailOrPhone,
-            onValueChange = { emailOrPhone = it },
+        // --- LOGO (252x105) ---
+        Image(
+            painter = painterResource(R.drawable.logo_without_text),
+            contentDescription = null,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-            singleLine = true,
-            textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
-            label = { Text("Phone or Email", color = LabelColor, fontSize = 12.sp, maxLines = 1) },
-            placeholder = { Text("Example: abc@example.com", color = PlaceholderColor, fontSize = 14.sp, maxLines = 1) },
-            shape = RoundedCornerShape(20.dp),
-            isError = emailError != null,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
-                unfocusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
-                errorBorderColor = ErrorColor,
-                cursorColor = LabelColor,
-                focusedLabelColor = LabelColor,
-                unfocusedLabelColor = LabelColor,
-                focusedTextColor = LabelColor,
-                unfocusedTextColor = LabelColor,
-                errorLabelColor = ErrorColor,
-                errorCursorColor = ErrorColor,
-                errorTextColor = LabelColor
-            )
+                .width(301.dp)
+                .height(301.dp),
+            contentScale = ContentScale.Fit      // بدون اعوجاج
         )
 
-        if (emailError != null) {
-            ErrorRow(message = emailError!!)
-        }
-
+        GradientTitleCentered("Login")
         Spacer(Modifier.height(16.dp))
 
-        // --- فیلد: Password ---
+        // --- Email ---
         OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
+            value = email,
+            onValueChange = { email = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp),
+                .height(fieldH),
             singleLine = true,
             textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
-            label = { Text("Password", color = LabelColor, style = MaterialTheme.typography.titleSmall, maxLines = 1) },
-            placeholder = { Text("******", color = PlaceholderColor, fontSize = 14.sp, maxLines = 1) },
+            label = { Text("Email", color = LabelColor, fontSize = 12.sp) },
+            placeholder = { Text("Example: abc@example.com", color = PlaceholderColor, fontSize = 14.sp) },
             shape = RoundedCornerShape(20.dp),
-            isError = passwordError != null,
-            visualTransformation = /*if (showPassword) VisualTransformation.None else*/ PasswordVisualTransformation(),
-//            trailingIcon = {
-//                Text(
-//                    text = if (showPassword) "Hide" else "Show",
-//                    color = PlaceholderColor,
-//                    modifier = Modifier
-//                        .padding(end = 12.dp)
-//                        .clickable { showPassword = !showPassword }
-//                )
-//            },
+            isError = emailErr != null,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = if (passwordError == null) BorderColor else ErrorColor,
-                unfocusedBorderColor = if (passwordError == null) BorderColor else ErrorColor,
+                focusedBorderColor = if (emailErr == null) BorderColor else ErrorColor,
+                unfocusedBorderColor = if (emailErr == null) BorderColor else ErrorColor,
                 errorBorderColor = ErrorColor,
                 cursorColor = LabelColor,
                 focusedLabelColor = LabelColor,
@@ -177,61 +122,136 @@ fun LoginScreen(
                 errorTextColor = LabelColor
             )
         )
-
-        if (passwordError != null) {
-            ErrorRow(message = passwordError!!)
-        }
+        if (emailErr != null) ErrorRow(emailErr!!)
 
         Spacer(Modifier.height(12.dp))
 
-        // Forgot password
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start
-        ) {
+        // --- Password ---
+        OutlinedTextField(
+            value = pass,
+            onValueChange = { pass = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(fieldH),
+            singleLine = true,
+            textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
+            label = { Text("Password", color = LabelColor, style = MaterialTheme.typography.titleSmall) },
+            placeholder = { Text("******", color = PlaceholderColor, fontSize = 14.sp) },
+            shape = RoundedCornerShape(20.dp),
+            isError = passErr != null,
+            visualTransformation = PasswordVisualTransformation(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (passErr == null) BorderColor else ErrorColor,
+                unfocusedBorderColor = if (passErr == null) BorderColor else ErrorColor,
+                errorBorderColor = ErrorColor,
+                cursorColor = LabelColor,
+                focusedLabelColor = LabelColor,
+                unfocusedLabelColor = LabelColor,
+                focusedTextColor = LabelColor,
+                unfocusedTextColor = LabelColor,
+                errorLabelColor = ErrorColor,
+                errorCursorColor = ErrorColor,
+                errorTextColor = LabelColor
+            )
+        )
+        if (passErr != null) ErrorRow(passErr!!)
+
+        Spacer(Modifier.height(10.dp))
+
+        // --- Forgot password ---
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
             Text(
-                text = "Forget password",
+                text = "Forgot password",
                 color = PlaceholderColor,
                 fontSize = 13.sp,
                 modifier = Modifier.clickable { onForgotPassword() }
             )
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // دکمه‌ی گرادیانی
-        GradientButton(
-            text = "Login",
-            gradient = ButtonGradient,
+        // --- Login button (52dp, radius 28) ---
+        Button(
+            onClick = { if (validate()) scope.launch { onLogin(email.trim(), pass) } },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .clip(RoundedCornerShape(40.dp))
+                .height(btnH),
+            shape = RoundedCornerShape(btnR),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            contentPadding = PaddingValues(0.dp)
         ) {
-            if (validate()) {
-                scope.launch { onLogin(emailOrPhone.trim(), password) }
-            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.linearGradient(ButtonGradient), RoundedCornerShape(btnR)),
+                contentAlignment = Alignment.Center
+            ) { Text("Login", color = Color.White, fontWeight = FontWeight.SemiBold) }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // Sign up
+        // --- Footer switch ---
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Do you have account? ", color = Color(0xFF2B2B2B), fontSize = 14.sp, maxLines = 1)
+            Text("Do you have account? ", color = Color(0xFF2B2B2B), fontSize = 14.sp)
             Text(
                 text = "Sign up",
                 color = ButtonGradient.last(),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { onSignUp() },
-                maxLines = 1
+                modifier = Modifier.clickable { onSignUp() }
             )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // --- Social buttons (Apple + Google) ---
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SocialRingButton(iconRes = R.drawable.ic_google, contentDesc = "Google", onClick = onGoogleLogin)
+        }
+
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+private fun SocialRingButton(iconRes: Int, contentDesc: String?, onClick: () -> Unit) {
+    val outer = 48.dp     // اگر در طرحت کوچکتر بود 44.dp کن
+    val innerPad = 2.dp
+    Box(
+        modifier = Modifier
+            .size(outer)
+            .background(Brush.linearGradient(ButtonGradient), RoundedCornerShape(999.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPad)
+                .background(Color.White, RoundedCornerShape(999.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(painter = painterResource(iconRes), contentDescription = contentDesc, modifier = Modifier.size(22.dp))
         }
     }
 }
 
-/* ---------- اجزاء کمکی ---------- */
-
+/* همون AppStatusBarLogin و ErrorRow و GradientTitleCentered قبلی‌ات رو نگه دار */
+@Composable
+fun AppStatusBarLogin(color: Color) {
+    val activity = LocalContext.current as Activity
+    val window = activity.window
+    val dark = color.luminance() > 0.5f
+    SideEffect {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        @Suppress("DEPRECATION")
+        window.statusBarColor = color.toArgb()
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = dark
+    }
+}
 @Composable
 private fun GradientTitleCentered(
     text: String,
@@ -262,7 +282,6 @@ private fun ErrorRow(message: String) {
             .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // آیکن خطا؛ خودت فایل ic_error.png رو بگذار
         Image(
             painter = painterResource(R.drawable.ic_error),
             contentDescription = null,
@@ -274,7 +293,6 @@ private fun ErrorRow(message: String) {
     }
 }
 
-/** دکمه گرادیانی گوشه‌گرد */
 @Composable
 private fun GradientButton(
     text: String,
@@ -297,20 +315,5 @@ private fun GradientButton(
         ) {
             Text(text = text, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
-    }
-}
-
-/** استاتوس‌بار همرنگ پس‌زمینه */
-@Composable
-fun AppStatusBarLogin(color: Color) {
-    val activity = LocalContext.current as Activity
-    val window = activity.window
-    val dark = color.luminance() > 0.5f
-    SideEffect {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = color.toArgb()
-        WindowInsetsControllerCompat(window, window.decorView)
-            .isAppearanceLightStatusBars = dark
     }
 }

@@ -1,29 +1,34 @@
 package com.dibachain.smfn.activity.signup
 
 import android.app.Activity
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.dibachain.smfn.R
 
-// --- Colors (یکسان با صفحات قبلی)
+/* --- colors --- */
 private val LabelColor = Color(0xFF46557B)
 private val PlaceholderColor = Color(0xFFB5BBCA)
 private val BorderColor = Color(0xFFECEEF2)
@@ -41,136 +46,156 @@ fun SignUpScreen(
     var pass by remember { mutableStateOf("") }
     var pass2 by remember { mutableStateOf("") }
 
-    var emailError by remember { mutableStateOf<String?>(null) }
-    var passError by remember { mutableStateOf<String?>(null) }
-    var pass2Error by remember { mutableStateOf<String?>(null) }
+    var emailErr by remember { mutableStateOf<String?>(null) }
+    var passErr by remember { mutableStateOf<String?>(null) }
+    var pass2Err by remember { mutableStateOf<String?>(null) }
 
-    fun isEmailValid(s: String) =
-        android.util.Patterns.EMAIL_ADDRESS.matcher(s).matches()
-
+    fun isEmailValid(s: String) = android.util.Patterns.EMAIL_ADDRESS.matcher(s).matches()
     fun validate(): Boolean {
-        emailError = null; passError = null; pass2Error = null
-
-        if (email.isBlank()) emailError = "Required"
-        else if (!isEmailValid(email)) emailError = "Invalid email"
-
-        if (pass.length < 6) passError = "Password must be at least 6 characters"
-        if (pass2.isBlank()) pass2Error = "Required"
-        else if (pass2 != pass) pass2Error = "Passwords do not match"
-
-        return emailError == null && passError == null && pass2Error == null
+        emailErr = null; passErr = null; pass2Err = null
+        if (!isEmailValid(email)) emailErr = "Invalid email"
+        if (pass.length < 6)     passErr  = "Password must be at least 6 characters"
+        if (pass2 != pass)       pass2Err = "Passwords do not match"
+        return emailErr == null && passErr == null && pass2Err == null
     }
+    val scroll = rememberScrollState()
 
-    // کانتنت وسط صفحه
-    Box(
+    val logoW = 252.dp
+    val logoH = 105.dp
+    val fieldH = 64.dp
+    val btnH   = 52.dp
+    val btnR   = 28.dp
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
+            .verticalScroll(scroll)       // اسکرول امن
             .systemBarsPadding()
             .imePadding()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+//        verticalArrangement = Arrangement.Center
     ) {
-        Column(
+        Image(
+            painter = painterResource(R.drawable.logo_without_text),
+            contentDescription = null,
+            modifier = Modifier
+                .width(301.dp)
+                .height(301.dp),
+            contentScale = ContentScale.Fit      // بدون اعوجاج
+        )
+            GradientTitleCentered("Sign up")
+        Spacer(Modifier.height(16.dp))
+        // فرم
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .height(fieldH),
+            singleLine = true,
+            textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
+            label = { Text("Email", color = LabelColor, fontSize = 12.sp) },
+            placeholder = { Text("Example: abc@example.com", color = PlaceholderColor, fontSize = 14.sp) },
+            shape = RoundedCornerShape(20.dp),
+            isError = emailErr != null,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (emailErr == null) BorderColor else ErrorColor,
+                unfocusedBorderColor = if (emailErr == null) BorderColor else ErrorColor,
+                errorBorderColor = ErrorColor,
+                cursorColor = LabelColor
+            )
+        )
+        if (emailErr != null) ErrorText(emailErr!!)
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = pass,
+            onValueChange = { pass = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(fieldH),
+            singleLine = true,
+            textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
+            label = { Text("Password", color = LabelColor, fontSize = 12.sp) },
+            placeholder = { Text("******", color = PlaceholderColor, fontSize = 14.sp) },
+            shape = RoundedCornerShape(20.dp),
+            isError = passErr != null,
+            visualTransformation = PasswordVisualTransformation(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (passErr == null) BorderColor else ErrorColor,
+                unfocusedBorderColor = if (passErr == null) BorderColor else ErrorColor,
+                errorBorderColor = ErrorColor,
+                cursorColor = LabelColor
+            )
+        )
+        if (passErr != null) ErrorText(passErr!!)
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = pass2,
+            onValueChange = { pass2 = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(fieldH),
+            singleLine = true,
+            textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
+            label = { Text("Re-Password", color = LabelColor, fontSize = 12.sp) },
+            placeholder = { Text("******", color = PlaceholderColor, fontSize = 14.sp) },
+            shape = RoundedCornerShape(20.dp),
+            isError = pass2Err != null,
+            visualTransformation = PasswordVisualTransformation(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (pass2Err == null) BorderColor else ErrorColor,
+                unfocusedBorderColor = if (pass2Err == null) BorderColor else ErrorColor,
+                errorBorderColor = ErrorColor,
+                cursorColor = LabelColor
+            )
+        )
+        if (pass2Err != null) ErrorText(pass2Err!!)
+
+        Spacer(Modifier.height(16.dp))
+
+        // دکمه ثبت‌نام (52 / 28)
+        Button(
+            onClick = { if (validate()) onSignUp(email.trim(), pass) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(btnH),
+            shape = RoundedCornerShape(btnR),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+            contentPadding = PaddingValues(0.dp)
         ) {
-            // تیتر
-            GradientTitleCentered("Sign up")
-
-            Spacer(Modifier.height(28.dp))
-
-            // Email
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                singleLine = true,
-                textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
-                label = { Text("Email", color = LabelColor, fontSize = 12.sp, textAlign = TextAlign.Start) },
-                placeholder = { Text("Example: abc@example.com", color = PlaceholderColor, fontSize = 14.sp) },
-                shape = RoundedCornerShape(20.dp),
-                isError = emailError != null,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
-                    unfocusedBorderColor = if (emailError == null) BorderColor else ErrorColor,
-                    cursorColor = LabelColor
-                )
-            )
-            if (emailError != null) ErrorText(emailError!!)
-
-            Spacer(Modifier.height(16.dp))
-
-            // Password
-            OutlinedTextField(
-                value = pass,
-                onValueChange = { pass = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                singleLine = true,
-                textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
-                label = { Text("Password", color = LabelColor, fontSize = 12.sp) },
-                placeholder = { Text("******", color = PlaceholderColor, fontSize = 14.sp) },
-                shape = RoundedCornerShape(20.dp),
-                isError = passError != null,
-                visualTransformation = PasswordVisualTransformation(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (passError == null) BorderColor else ErrorColor,
-                    unfocusedBorderColor = if (passError == null) BorderColor else ErrorColor,
-                    cursorColor = LabelColor
-                )
-            )
-            if (passError != null) ErrorText(passError!!)
-
-            Spacer(Modifier.height(16.dp))
-
-            // Re-Password
-            OutlinedTextField(
-                value = pass2,
-                onValueChange = { pass2 = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                singleLine = true,
-                textStyle = TextStyle(color = LabelColor, fontSize = 16.sp),
-                label = { Text("Re-Password", color = LabelColor, fontSize = 12.sp) },
-                placeholder = { Text("******", color = PlaceholderColor, fontSize = 14.sp) },
-                shape = RoundedCornerShape(20.dp),
-                isError = pass2Error != null,
-                visualTransformation = PasswordVisualTransformation(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (pass2Error == null) BorderColor else ErrorColor,
-                    unfocusedBorderColor = if (pass2Error == null) BorderColor else ErrorColor,
-                    cursorColor = LabelColor
-                )
-            )
-            if (pass2Error != null) ErrorText(pass2Error!!)
-
-            Spacer(Modifier.height(24.dp))
-
-            // دکمه Sign up
-            GradientButton(
-                text = "Sign up",
-                gradient = ButtonGradient,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(40.dp))
-            ) {
-                if (validate()) onSignUp(email.trim(), pass)
-            }
-
-            // در صورت نیاز می‌تونی یک متن «Back to login» هم اضافه کنی
-            // Text("Back to login", modifier = Modifier.clickable { onBackToLogin() })
+                    .fillMaxSize()
+                    .background(Brush.linearGradient(ButtonGradient), RoundedCornerShape(btnR)),
+                contentAlignment = Alignment.Center
+            ) { Text("Sign up", color = Color.White, fontWeight = FontWeight.SemiBold) }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        // بازگشت به لاگین
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Already have an account? ", color = Color(0xFF2B2B2B), fontSize = 14.sp)
+            Text(
+                text = "Login",
+                color = ButtonGradient.last(),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { onBackToLogin() }
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
     }
 }
 
-/* ---------- اجزای کمکی (مثل صفحات قبلی) ---------- */
+/* ---------- helpers ---------- */
 
 @Composable
 private fun GradientTitleCentered(text: String) {
@@ -196,31 +221,6 @@ private fun ErrorText(message: String) {
             .fillMaxWidth()
             .padding(top = 6.dp)
     )
-}
-
-@Composable
-private fun GradientButton(
-    text: String,
-    gradient: List<Color>,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(40.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-        contentPadding = PaddingValues(0.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.linearGradient(gradient), RoundedCornerShape(40.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = text, color = Color.White, fontWeight = FontWeight.SemiBold)
-        }
-    }
 }
 
 @Composable

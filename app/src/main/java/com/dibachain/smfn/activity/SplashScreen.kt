@@ -26,10 +26,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.dibachain.smfn.R
 
-// گرادیان دکمه
 private val Gradient = listOf(
-    Color(0xFFFFC753), // #FFC753
-    Color(0xFF4AC0A8)  // #4AC0A8
+    Color(0xFFFFC753),
+    Color(0xFF4AC0A8)
 )
 
 @Composable
@@ -37,7 +36,6 @@ fun SplashScreen(onGetStarted: () -> Unit = {}) {
     AppStatusBar(color = Color.White)
 
     val config = LocalConfiguration.current
-    // حدوداً معادل 151dp روی قد ~800dp؛ نسبتی که روی همه گوشی‌ها خوب می‌شینه (~19%)
     val bottomPadding = (config.screenHeightDp * 0.19f).dp
 
     Box(
@@ -46,16 +44,15 @@ fun SplashScreen(onGetStarted: () -> Unit = {}) {
             .background(Color.White)
             .systemBarsPadding()
     ) {
-        // لوگو دقیقاً وسط صفحه
         Image(
-            painter = painterResource(R.drawable.smfn), // ← لوگوت
+            painter = painterResource(R.drawable.logo_singin),
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.Center)
-                .fillMaxWidth(0.6f)      // می‌تونی کم/زیادش کنی
+                .fillMaxWidth(0.6f)
+                .width(331.dp)
+                .height(331.dp)
         )
-
-        // دکمه پایین با فاصله‌ی نسبتی از پایین + فاصله‌ی افقی 28
         Button(
             onClick = onGetStarted,
             modifier = Modifier
@@ -68,7 +65,6 @@ fun SplashScreen(onGetStarted: () -> Unit = {}) {
             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
             contentPadding = PaddingValues(0.dp)
         ) {
-            // پس‌زمینه‌ی گرادیانی
             Box(
                 modifier = Modifier
                     .fillMaxSize()
