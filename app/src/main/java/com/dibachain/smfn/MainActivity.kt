@@ -2,7 +2,6 @@ package com.dibachain.smfn
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
@@ -20,6 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.dibachain.smfn.flags.OnboardingPrefs
 import com.dibachain.smfn.flags.AuthPrefs
 import com.dibachain.smfn.ui.theme.SMFNTheme
@@ -36,197 +40,241 @@ import com.dibachain.smfn.activity.signup.SignUpScreen
 import com.dibachain.smfn.activity.signup.VerificationCodeSignupScreen
 import com.dibachain.smfn.activity.feature.profile.ProfileStepperScreen
 import com.dibachain.smfn.activity.HomeScreen
+import com.dibachain.smfn.activity.items.ItemDetailScreen
+import com.dibachain.smfn.activity.items.RatingsSummary
+import com.dibachain.smfn.activity.items.Review
+import com.dibachain.smfn.activity.swap.SwapDetailsScreen
+import com.dibachain.smfn.activity.swap.SwapItem
+import com.dibachain.smfn.activity.swap.SwapUser
+import com.dibachain.smfn.navigation.Route
+import kotlinx.coroutines.launch
+
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val prefs = OnboardingPrefs(this)
-        val auth = AuthPrefs(this)
+        val onboardingPrefs = OnboardingPrefs(this)
+        val authPrefs = AuthPrefs(this)
 
         setContent {
             SMFNTheme {
-                // stateهای اصلی
-                val shown by prefs.shownFlow.collectAsState(initial = false)
-                val token by auth.token.collectAsState(initial = "")
+                val nav = rememberNavController()
+                val shown by onboardingPrefs.shownFlow.collectAsState(initial = false)
+                val token by authPrefs.token.collectAsState(initial = "")
+                val demoSummary = RatingsSummary(
+                    average = 4.0f,
+                    totalReviews = 52,
+                    counts = mapOf(5 to 30, 4 to 12, 3 to 6, 2 to 3, 1 to 1)
+                )
 
-                // --- اسپلش سفید ۴ ثانیه‌ای ---
-                var showWhiteSplash by remember { mutableStateOf(true) }
-
-                // مسیرها
-                var showHome by remember(token) { mutableStateOf(false) }
-                var showOnboarding by remember(shown, token) { mutableStateOf(false) }
-                var showSplash by remember { mutableStateOf(false) } // ✅ دوباره اضافه شد
-                var showLogin by remember { mutableStateOf(false) }
-
-                // فراموشی رمز
-                var showForgot by remember { mutableStateOf(false) }
-                var showVerification by remember { mutableStateOf(false) }
-                var showSetNewPass by remember { mutableStateOf(false) }
-
-                // ثبت‌نام
-                var showSignUp by remember { mutableStateOf(false) }
-                var showSignUpVerification by remember { mutableStateOf(false) }
-
-                // ویزارد پروفایل
-                var showProfileSetup by remember { mutableStateOf(false) }
-
-                // ---- فلگ‌های امن برای کارهای async (بدون launch در کامپوزیشن) ----
-                var pendingSetOnboardingShown by remember { mutableStateOf(false) }
-                var pendingToken: String? by remember { mutableStateOf(null) }
-
-                // اعمال async با LaunchedEffect
-                LaunchedEffect(pendingSetOnboardingShown) {
-                    if (pendingSetOnboardingShown) {
-                        prefs.setShown()
-                        pendingSetOnboardingShown = false
-                    }
-                }
-                LaunchedEffect(pendingToken) {
-                    pendingToken?.let { t ->
-                        auth.setToken(t)
-                        pendingToken = null
-                    }
-                }
-
-                // بعد از اسپلش سفید، تصمیم مسیر:
-                LaunchedEffect(showWhiteSplash, shown, token) {
-                    if (showWhiteSplash) {
-                        delay(2000)
-                        showWhiteSplash = false
-                        when {
-                            token.isNotBlank() -> showHome = true
-                            !shown -> showOnboarding = true
-                            else -> showSplash = true            // ✅ اسپلش قدیمی
-                        }
-                    }
-                }
-
+                val demoReviews = listOf(
+                    Review(painterResource(R.drawable.ic_avatar), "Courtney Henry", 5, "2 mins ago",
+                        "Consequat velit qui adipisicing sunt do rependerit ad laborum tempor ullamco exercitation."),
+                    Review(painterResource(R.drawable.ic_avatar), "Cameron Williamson", 4, "2 mins ago",
+                        "Consequat velit qui adipisicing sunt do rependerit ad laborum tempor ullamco."),
+                    Review(painterResource(R.drawable.ic_avatar), "Jane Cooper", 3, "2 mins ago",
+                        "Ullamco tempor adipisicing et voluptate duis sit esse aliqua esse ex.")
+                )
                 Surface(color = MaterialTheme.colorScheme.background) {
-                    when {
-                        // 1) اسپلش سفید با لوگو
-                        showWhiteSplash -> {
-                            BackHandler { finish() }
+                    NavHost(navController = nav, startDestination = Route.SplashWhite.value) {
+
+                        // Splash سفید → تصمیم مسیر
+                        composable(Route.SplashWhite.value) {
                             WhiteSplashScreen()
-                        }
-
-                        // 2) هوم
-                        showHome -> {
-                            BackHandler { finish() }
-                            HomeScreen()
-                        }
-
-                        // 3) آنبوردینگ (اولین اجرا)
-                        showOnboarding -> {
-                            BackHandler(true) { }
-                            OnboardingScreen(
-                                onFinished = {
-                                    // بعد از آنبوردینگ → اسپلش قدیمی
-                                    pendingSetOnboardingShown = true
-                                    showOnboarding = false
-                                    showSplash = true                // ✅
+                            LaunchedEffect(Unit) {
+                                delay(2000)
+                                when {
+                                    token.isNotBlank() -> {
+                                        nav.navigate(Route.Home.value) {
+                                            popUpTo(Route.SplashWhite.value) { inclusive = true }
+                                        }
+                                    }
+                                    !shown -> {
+                                        nav.navigate(Route.Onboarding.value) {
+                                            popUpTo(Route.SplashWhite.value) { inclusive = true }
+                                        }
+                                    }
+                                    else -> {
+                                        nav.navigate(Route.SplashOld.value) {
+                                            popUpTo(Route.SplashWhite.value) { inclusive = true }
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
 
-                        // 4) اسپلش قدیمی اپ (با دکمه شروع)
-                        showSplash -> {
-                            BackHandler { finish() }
+                        composable(Route.SplashOld.value) {
                             SplashScreen(
                                 onGetStarted = {
-                                    showSplash = false
-                                    showLogin = true
+                                    nav.navigate(Route.Login.value) {
+                                        popUpTo(Route.SplashOld.value) { inclusive = true }
+                                    }
                                 }
                             )
                         }
 
-                        // 5) ثبت‌نام: تایید کد
-                        showSignUpVerification -> {
-                            BackHandler { showSignUpVerification = false; showSignUp = true }
-                            VerificationCodeSignupScreen(
-                                onNext = {
-                                    showSignUpVerification = false
-                                    showProfileSetup = true
-                                },
-                                onResend = { /* TODO */ }
-                            )
-                        }
-
-                        // 6) ثبت‌نام: فرم
-                        showSignUp -> {
-                            BackHandler { showSignUp = false; showLogin = true }
-                            SignUpScreen(
-                                onSignUp = { _, _ ->
-                                    showSignUp = false
-                                    showSignUpVerification = true
-                                },
-                                onBackToLogin = {
-                                    showSignUp = false
-                                    showLogin = true
+                        composable(Route.Onboarding.value) {
+                            val scope = rememberCoroutineScope()
+                            OnboardingScreen(
+                                onFinished = {
+                                    scope.launch { onboardingPrefs.setShown() }
+                                    nav.navigate(Route.SplashOld.value) {
+                                        popUpTo(Route.Onboarding.value) { inclusive = true }
+                                    }
                                 }
                             )
                         }
 
-                        // 7) ویزارد پروفایل
-                        showProfileSetup -> {
-                            BackHandler { showProfileSetup = false; showLogin = true }
-                            ProfileStepperScreen(
-                                onBack = { showProfileSetup = false; showLogin = true },
-                                onDone = { _, _, _, _, _, _ ->
-                                    pendingToken = "REPLACE_WITH_REAL_TOKEN"
-                                    showProfileSetup = false
-                                    showHome = true
-                                }
-                            )
-                        }
-
-                        // 8) فراموشی رمز: ست‌پس جدید
-                        showSetNewPass -> {
-                            BackHandler { showSetNewPass = false; showLogin = true }
-                            SetNewPasswordScreen(
-                                onDone = {
-                                    showSetNewPass = false
-                                    showLogin = true
-                                }
-                            )
-                        }
-
-                        // 9) فراموشی رمز: وارد کردن کد
-                        showVerification -> {
-                            BackHandler { showVerification = false; showForgot = true }
-                            VerificationCodeScreen(
-                                onNext = {
-                                    showVerification = false
-                                    showSetNewPass = true
-                                },
-                                onResend = { /* TODO */ }
-                            )
-                        }
-
-                        // 10) فراموشی رمز: ایمیل/شماره
-                        showForgot -> {
-                            BackHandler { showForgot = false; showLogin = true }
-                            ForgetPasswordScreen(
-                                onNext = {
-                                    showForgot = false
-                                    showVerification = true
-                                }
-                            )
-                        }
-
-                        // 11) لاگین
-                        showLogin -> {
-                            BackHandler { showLogin = false; finish() }
+                        composable(Route.Login.value) {
                             LoginScreen(
                                 onLogin = { _, _ ->
-                                    pendingToken = "REPLACE_WITH_REAL_TOKEN"
-                                    showLogin = false
-                                    showHome = true
+                                    authPrefs.setToken("REPLACE_WITH_REAL_TOKEN") // اگر suspend بود اینجا await می‌شود
+                                    nav.navigate(Route.Home.value) {
+                                        popUpTo(Route.Login.value) { inclusive = true }
+                                    }
                                 },
-                                onForgotPassword = { showLogin = false; showForgot = true },
-                                onSignUp = { showLogin = false; showSignUp = true }
+                                onForgotPassword = { nav.navigate(Route.Forgot.value) },
+                                onSignUp = { nav.navigate(Route.SignUp.value) }
+                            )
+                        }
+
+
+                        composable(Route.Forgot.value) {
+                            ForgetPasswordScreen(
+                                onNext = { nav.navigate(Route.Verify.value) }
+                            )
+                        }
+
+                        composable(Route.Verify.value) {
+                            VerificationCodeScreen(
+                                onNext = { nav.navigate(Route.SetNewPass.value) },
+                                onResend = { /* TODO */ }
+                            )
+                        }
+
+                        composable(Route.SetNewPass.value) {
+                            SetNewPasswordScreen(
+                                onDone = { nav.popBackStack(Route.Login.value, inclusive = false) }
+                            )
+                        }
+
+                        composable(Route.SignUp.value) {
+                            SignUpScreen(
+                                onSignUp = { _, _ -> nav.navigate(Route.SignUpVerify.value) },
+                                onBackToLogin = { nav.popBackStack() }
+                            )
+                        }
+
+                        composable(Route.SignUpVerify.value) {
+                            VerificationCodeSignupScreen(
+                                onNext = {
+                                    nav.navigate(Route.ProfileStep.value) {
+                                        popUpTo(Route.Login.value) { inclusive = false }
+                                    }
+                                },
+                                onResend = { /* TODO */ }
+                            )
+                        }
+
+                        composable(Route.ProfileStep.value) {
+
+                            val scope = rememberCoroutineScope() // ✅ بیرون از onDone
+
+                            ProfileStepperScreen(
+                                onBack = { nav.popBackStack() },
+                                onDone = { _, _, _, _, _, _ ->
+                                    // اگر setToken یک تابع suspend است:
+                                    scope.launch {
+                                        authPrefs.setToken("REPLACE_WITH_REAL_TOKEN")
+                                        nav.navigate(Route.Home.value) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    }
+
+                                    // اگر setToken suspend نیست، می‌تونی بدون launch هم بنویسی:
+                                    // authPrefs.setToken("REPLACE_WITH_REAL_TOKEN")
+                                    // nav.navigate(Route.Home.value) {
+                                    //     popUpTo(0) { inclusive = true }
+                                    // }
+                                }
+                            )
+                        }
+
+
+                        // Home → ItemDetail
+                        composable(Route.Home.value) {
+                            HomeScreen(
+                                onOpenItem = { itemId ->
+                                    nav.navigate(Route.ItemDetail(itemId).asRoute())
+                                }
+                            )
+                        }
+                        composable(Route.SwapDetails.value) {
+                            SwapDetailsScreen(
+                                title = "Lina Ehab",
+                                leftIcon = painterResource(R.drawable.ic_swap_back),     // آیکن برگشت
+                                callIcon = painterResource(R.drawable.ic_call),           // جایگزین کن
+                                moreIcon = painterResource(R.drawable.ic_swap_more),
+                                userA = SwapUser(
+                                    avatar = painterResource(R.drawable.ic_avatar),
+                                    name = "Jolie",
+                                    location = "Garden City"
+                                ),
+                                itemA = SwapItem(painterResource(R.drawable.items1)),
+                                userB = SwapUser(
+                                    avatar = painterResource(R.drawable.ic_avatar),
+                                    name = "Lina Ehab",
+                                    location = "Maadi Sarayat"
+                                ),
+                                itemB = SwapItem(painterResource(R.drawable.items1)),
+                                onBack = { nav.popBackStack() },
+                                onCall = { /* TODO: open call intent */ },
+                                onMore = { /* TODO */ }
+                            )
+                        }
+
+                        // Item Detail
+                        composable(
+                            route = Route.ItemDetail.pattern,
+                            arguments = listOf(navArgument("itemId") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                            val itemId = backStackEntry.arguments?.getString("itemId") ?: return@composable
+
+                            // صفحه‌ی دیتیل (از کد خودت استفاده می‌کنیم)
+                            ItemDetailScreen(
+                                images = listOf(
+                                    painterResource(R.drawable.items1),
+                                    painterResource(R.drawable.items1)
+                                ),
+                                likeCount = 357,
+                                isFavorite = true,
+                                backIcon = painterResource(R.drawable.ic_items_back),
+                                shareIcon = painterResource(R.drawable.ic_upload_items),
+                                moreIcon = painterResource(R.drawable.ic_menu_revert),
+                                starIcon = painterResource(R.drawable.ic_menu_agenda),
+
+                                title = "Item $itemId",
+                                sellerAvatar = painterResource(R.drawable.ic_avatar),
+                                sellerName = "Jolie",
+                                sellerVerifiedIcon = painterResource(R.drawable.ic_verify),
+                                sellerstaricon = painterResource(R.drawable.ic_star_items),
+                                sellerRatingText = "N/A",
+                                sellerLocation = "Dubai, U.A.E",
+                                sellerDistanceText = "(2423) km from you",
+
+                                description = "Canon4000D camera rarely used and with all its accessories",
+                                conditionTitle = "Good",
+                                conditionSub = "Gently used and may have minor cosmetic flaws, fully functional.",
+                                valueText = "AED 8500",
+                                categories = listOf("Photography", "Cameras"),
+                                uploadedAt = "17/09/2025",
+                                onOpenSwapDetails = { nav.navigate(Route.SwapDetails.value) },
+                                reviews = demoReviews,
+                                summary = demoSummary,
+                                emptyIllustration = painterResource(R.drawable.ic_menu_report_image),
+                                onSwap = {},
                             )
                         }
                     }

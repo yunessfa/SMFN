@@ -13,6 +13,7 @@ foundation = "1.9.1"
 foundationVersion = "1.9.2"
 animation = "1.9.2"
 animationCore = "1.9.2"
+navigationCompose = "2.9.5"
 
 [libraries]
 androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
@@ -36,6 +37,7 @@ androidx-foundation = { group = "androidx.compose.foundation", name = "foundatio
 foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundationVersion" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "animation" }
 androidx-compose-animation-core = { group = "androidx.compose.animation", name = "animation-core", version.ref = "animationCore" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

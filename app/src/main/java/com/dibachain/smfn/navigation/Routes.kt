@@ -1,4 +1,22 @@
 package com.dibachain.smfn.navigation
 
-class Routes {
+sealed class Route(val value: String) {
+    data object SplashWhite : Route("splash_white")
+    data object SplashOld   : Route("splash_old")
+    data object Onboarding  : Route("onboarding")
+    data object Login       : Route("login")
+    data object Forgot      : Route("forgot")
+    data object Verify      : Route("verify")
+    data object SetNewPass  : Route("set_new_pass")
+    data object SignUp      : Route("signup")
+    data object SignUpVerify: Route("signup_verify")
+    data object ProfileStep : Route("profile_step")
+    data object Home        : Route("home")
+    data object SwapDetails        : Route("swap_details")
+
+    /** Item Detail with arg */
+    data class ItemDetail(val itemId: String) {
+        companion object { const val pattern = "item_detail/{itemId}" }
+        fun asRoute() = "item_detail/$itemId"
+    }
 }

@@ -9,7 +9,9 @@ import com.dibachain.smfn.ui.components.BottomItem
 import com.dibachain.smfn.ui.components.Media
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onOpenItem: (itemId: String) -> Unit
+) {
     // آواتار و آیکون‌های ردیف بالا به صورت Painter
     val avatarPainter = painterResource(R.drawable.ic_avatar)
     val right1Painter = painterResource(R.drawable.ic_filter_search)
@@ -49,6 +51,9 @@ fun HomeScreen() {
         rightIcon1 = right1Painter,
         rightIcon2 = right2Painter,
         sliderItems = sliderItems,
-        bottomItems = bottomItems
+        bottomItems = bottomItems,
+        onOpenItem = { index, _ ->
+            onOpenItem(index.toString()) // اینجا آیدی واقعی خودتو پاس بده
+        }
     )
 }

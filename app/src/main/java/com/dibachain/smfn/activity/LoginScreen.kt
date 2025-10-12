@@ -39,7 +39,7 @@ private val ButtonGradient = listOf(Color(0xFFFFC753), Color(0xFF4AC0A8))
 
 @Composable
 fun LoginScreen(
-    onLogin:  (emailOrPhone: String, password: String) -> Unit = { _, _ -> },
+    onLogin: suspend  (emailOrPhone: String, password: String) -> Unit = { _, _ -> },
     onForgotPassword: () -> Unit = {},
     onSignUp: () -> Unit = {},
     onAppleLogin: () -> Unit = {},
