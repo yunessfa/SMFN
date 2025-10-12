@@ -92,7 +92,7 @@ private val Gradient1 = listOf(Color(0xFF6DC198))
 @Composable
 fun ProfileStepperScreen(
     onBack: () -> Unit = {},
-    onDone:  (
+    onDone:   (
         phone: String,
         username: String,
         gender: String,
@@ -918,7 +918,7 @@ private fun Modifier.gradientTint(): Modifier =
 
 
 @Composable
-private fun GradientText(text: String, fontSize: Int, weight: FontWeight = FontWeight.SemiBold) {
+fun GradientText(text: String, fontSize: Int, weight: FontWeight = FontWeight.SemiBold) {
     Text(
         text = text,
         style = TextStyle(
