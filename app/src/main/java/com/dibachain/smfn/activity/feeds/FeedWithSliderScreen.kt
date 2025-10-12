@@ -25,11 +25,7 @@ import com.dibachain.smfn.R
 import androidx.compose.ui.unit.dp
 import com.dibachain.smfn.ui.components.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.filled.Person
+import androidx.navigation.NavController
 
 import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.*
@@ -48,6 +44,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import com.dibachain.smfn.activity.feature.profile.GradientText
+import com.dibachain.smfn.navigation.Route
 
 /* ---------------- Top Row ---------------- */
 
@@ -168,7 +165,9 @@ fun FeedWithSliderScreen(
     rightIcon2: Painter? = null,
     sliderItems: List<Media>,
     bottomItems: List<BottomItem>,
-    onOpenItem: (index: Int, media: Media) -> Unit = { _, _ -> } // 👈 جدید
+    onGetPremiumClick: () -> Unit = {} ,         // 👈 اضافه شد
+    onOpenItem: (index: Int, media: Media) -> Unit = { _, _ -> },
+    onNotifications: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var bottomIndex by remember { mutableIntStateOf(0) }
@@ -196,7 +195,7 @@ fun FeedWithSliderScreen(
             rightIcon1 = rightIcon1,
             rightIcon2 = rightIcon2,
             onRightIcon1 = { showFilterSheet = true },
-            onRightIcon2 = { /* TODO */ }
+            onRightIcon2 = { onNotifications() }
         )
 
         Spacer(Modifier.height(21.dp))
@@ -247,9 +246,9 @@ fun FeedWithSliderScreen(
                 luxuryIcon = painterResource(R.drawable.ic_luxury),          // 👈 آیکن صدف
                 premiumIcon = painterResource(R.drawable.logo_without_text), // 👈 آیکن عینک
                 onGetPremium = {
-                    // TODO: مسیر خرید/پریمیوم
-                    showFilterSheet = false
-                }
+                    onGetPremiumClick()
+                        showFilterSheet = false
+                },
             )
         }
     }
@@ -316,7 +315,8 @@ fun FilterBottomSheetContent(
     // 👇 جدید
     luxuryIcon: Painter? = null,
     premiumIcon: Painter? = null,
-    onGetPremium: () -> Unit = {}
+    onGetPremium: () -> Unit = {},
+    nav: NavController? = null, // 👈 اینو اضافه کن
 ) {
     var categoryExpanded by remember { mutableStateOf(true) }
     var genderExpanded by remember { mutableStateOf(false) }
@@ -482,8 +482,10 @@ fun FilterBottomSheetContent(
                 PremiumOutlineButton(
                     text = "Get SMFN Premium",
                     iconRes = R.drawable.logo_crop, // آیکن خودت
-                    onClick = onGetPremium,
-                    modifier = Modifier
+                    onClick = {
+                        nav?.navigate(Route.UpgradePlan.value)
+                        onGetPremium()
+                    },                    modifier = Modifier
                         .fillMaxWidth()   // -> با padding بالا، از هر طرف 20dp فاصله می‌گیرد
                 )
             } else {

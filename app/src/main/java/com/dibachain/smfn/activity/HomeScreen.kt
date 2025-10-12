@@ -10,7 +10,10 @@ import com.dibachain.smfn.ui.components.Media
 
 @Composable
 fun HomeScreen(
-    onOpenItem: (itemId: String) -> Unit
+    onOpenItem: (itemId: String) -> Unit,
+    onGetPremiumClick: () -> Unit = {},
+    onNotifications: () -> Unit = {},
+
 ) {
     // آواتار و آیکون‌های ردیف بالا به صورت Painter
     val avatarPainter = painterResource(R.drawable.ic_avatar)
@@ -54,6 +57,9 @@ fun HomeScreen(
         bottomItems = bottomItems,
         onOpenItem = { index, _ ->
             onOpenItem(index.toString()) // اینجا آیدی واقعی خودتو پاس بده
-        }
+        },
+         onGetPremiumClick = { onGetPremiumClick()},
+        onNotifications = { onNotifications() }
+
     )
 }

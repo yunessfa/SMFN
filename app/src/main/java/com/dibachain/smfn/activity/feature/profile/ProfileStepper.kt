@@ -92,6 +92,7 @@ private val Gradient1 = listOf(Color(0xFF6DC198))
 @Composable
 fun ProfileStepperScreen(
     onBack: () -> Unit = {},
+    onGetPremiumClick: () -> Unit = {},
     onDone:   (
         phone: String,
         username: String,
@@ -227,7 +228,8 @@ fun ProfileStepperScreen(
                 selected = selectedSubs.toMutableSet(), // یا از یک MutableSet نگهداری کن
                 onSelectionChanged = { s ->
                     selectedSubs.clear(); selectedSubs.addAll(s)
-                }
+                },
+                onGetPremiumClick = { onGetPremiumClick() }
             )
         }
 
@@ -932,7 +934,8 @@ fun GradientText(text: String, fontSize: Int, weight: FontWeight = FontWeight.Se
 /* ---------- The Component (replace StepInterests with this) ---------- */
 @Composable
 fun StepCategoriesExact(
-    selected: MutableSet<String>,                       // کلید زیرموضوعات انتخاب‌شده
+    selected: MutableSet<String>,
+    onGetPremiumClick: () -> Unit = {},
     onSelectionChanged: (Set<String>) -> Unit
 ) {
     val cats = remember {
@@ -1085,7 +1088,7 @@ fun StepCategoriesExact(
                             PremiumOutlineButton(
                                 text = "Get SMFN Premium",
                                 iconRes = R.drawable.logo_crop, // آیکن خودت
-                                onClick = { /* TODO */ },
+                                onClick = { onGetPremiumClick() },
                                 modifier = Modifier
                                     .fillMaxWidth()   // -> با padding بالا، از هر طرف 20dp فاصله می‌گیرد
                             )

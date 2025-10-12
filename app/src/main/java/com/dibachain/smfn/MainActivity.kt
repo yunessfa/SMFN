@@ -40,15 +40,23 @@ import com.dibachain.smfn.activity.signup.SignUpScreen
 import com.dibachain.smfn.activity.signup.VerificationCodeSignupScreen
 import com.dibachain.smfn.activity.feature.profile.ProfileStepperScreen
 import com.dibachain.smfn.activity.HomeScreen
+import com.dibachain.smfn.activity.inventory.InventoryItem
 import com.dibachain.smfn.activity.items.ItemDetailScreen
 import com.dibachain.smfn.activity.items.RatingsSummary
 import com.dibachain.smfn.activity.items.Review
+import com.dibachain.smfn.activity.notification.NotificationItem
+import com.dibachain.smfn.activity.notification.NotificationScreen
+import com.dibachain.smfn.activity.paywall.UpgradePlanScreen
 import com.dibachain.smfn.activity.swap.SwapDetailsScreen
+import com.dibachain.smfn.activity.swap.SwapDetailsScreenV2
 import com.dibachain.smfn.activity.swap.SwapItem
 import com.dibachain.smfn.activity.swap.SwapUser
 import com.dibachain.smfn.navigation.Route
+import com.dibachain.smfn.ui.components.BottomItem
 import kotlinx.coroutines.launch
 
+
+//private : Int
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,6 +85,43 @@ class MainActivity : ComponentActivity() {
                     Review(painterResource(R.drawable.ic_avatar), "Jane Cooper", 3, "2 mins ago",
                         "Ullamco tempor adipisicing et voluptate duis sit esse aliqua esse ex.")
                 )
+                val p = painterResource(R.drawable.items1)
+                val inventoryList = remember {
+                    listOf(
+                        InventoryItem("1", p),
+                        InventoryItem("2", p),
+                        InventoryItem("3", p),
+                    )
+                }
+                val ava1 = painterResource(R.drawable.ic_avatar)
+                val ava2 = painterResource(R.drawable.ic_avatar)
+                val th  = painterResource(R.drawable.items1)
+                val demo = listOf(
+                    NotificationItem("1", ava1, "Qure",  "Liked your post", "13 hours ago", th),
+                    NotificationItem("2", ava2, "Sarah", "Swap rejected",   "2 hours ago",  th),
+                    NotificationItem("3", ava1, "Sami",  "Swap Accepted",    "1 hours ago", th),
+                    NotificationItem("4", ava1, "Jack",  "Swap rejected",    "1 month ago", th),
+                    NotificationItem("5", ava1, "Mo",    "Swap Accepted",    "1 month ago", th),
+                    NotificationItem("6", ava1, "Jolie", "wants to Swap",    "1 month ago", th),
+                )
+                val homeOutline = painterResource(R.drawable.home_outline)
+                val homeFilled  = painterResource(R.drawable.home)
+                val addOutline  = painterResource(R.drawable.add_circle_outline)
+                val addFilled   = painterResource(R.drawable.add_circle)
+                val chatOutline = painterResource(R.drawable.messages_outline)
+                val chatFilled  = painterResource(R.drawable.messages)
+                val profOutline = painterResource(R.drawable.profile_circle_outline)
+                val profFilled  = painterResource(R.drawable.profile_circle)
+                val ranking  = painterResource(R.drawable.ranking)
+
+                val bottomItems = listOf(
+                    BottomItem("home",    activePainter = homeOutline, inactivePainter = homeFilled),
+                    BottomItem("add",     activePainter = addOutline,  inactivePainter = addFilled),
+                    BottomItem("chat",    activePainter = chatOutline, inactivePainter = chatFilled),
+                    BottomItem("ranking",    activePainter = ranking, inactivePainter = ranking),
+                    BottomItem("profile", activePainter = profOutline, inactivePainter = profFilled),
+                )
+                val currentTabIndex=0
                 Surface(color = MaterialTheme.colorScheme.background) {
                     NavHost(navController = nav, startDestination = Route.SplashWhite.value) {
 
@@ -184,6 +229,9 @@ class MainActivity : ComponentActivity() {
 
                             ProfileStepperScreen(
                                 onBack = { nav.popBackStack() },
+                                onGetPremiumClick = {
+                                    nav.navigate(Route.UpgradePlan.value)
+                                },
                                 onDone = { _, _, _, _, _, _ ->
                                     // اگر setToken یک تابع suspend است:
                                     scope.launch {
@@ -193,6 +241,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
+
                                     // اگر setToken suspend نیست، می‌تونی بدون launch هم بنویسی:
                                     // authPrefs.setToken("REPLACE_WITH_REAL_TOKEN")
                                     // nav.navigate(Route.Home.value) {
@@ -201,13 +250,107 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+                        /* ================= SwapDetailsScreenV2 ================= */
+                        composable(Route.SwapDetailsV2.value) {
+                            // اگر از Inventory برگشتیم، شناسه‌ی انتخاب‌شده را بخوانیم
+                            val selectedId by nav.currentBackStackEntry
+                                ?.savedStateHandle
+                                ?.getStateFlow("selected_item_id", "")
+                                ?.collectAsState() ?: remember { mutableStateOf("") }
 
+
+                            val selectedItem = remember(selectedId) { inventoryList.find { it.id == selectedId } }
+
+                            // کاربران نمونه
+                            val userA = SwapUser(
+                                avatar = painterResource(R.drawable.ic_avatar),
+                                name = "Kamyar",
+                                location = "Dubai,UAE"
+                            )
+                            val userB = SwapUser(
+                                avatar = painterResource(R.drawable.ic_avatar),
+                                name = "Jolie",
+                                location = "Dubai,UAE"
+                            )
+
+                            // صفحه V2 با تمام حالت‌ها – فعلاً حالت Ready/Empty بر اساس داشتن آیتم
+                            SwapDetailsScreenV2(
+                                title = "Lina Ehab",
+                                state = if (selectedItem == null)
+                                    com.dibachain.smfn.activity.swap.SwapScreenState.Empty
+                                else
+                                    com.dibachain.smfn.activity.swap.SwapScreenState.Ready,
+                                leftIcon = painterResource(R.drawable.ic_swap_back),
+                                callIcon = painterResource(R.drawable.ic_call),
+                                moreIcon = painterResource(R.drawable.ic_swap_more),
+                                userA = userA,
+                                itemA = selectedItem?.let { com.dibachain.smfn.activity.swap.SwapItem(it.image) },
+                                userB = userB,
+                                itemB = com.dibachain.smfn.activity.swap.SwapItem(painterResource(R.drawable.items1)),
+                                onBack = { nav.popBackStack() },
+                                onCall = { /* TODO */ },
+                                onMore = { /* TODO */ },
+                                onSelectItem = { nav.navigate(Route.InventorySelect.value) },   // ← برو انتخاب آیتم
+                                onRequestSwap = { /* TODO: ارسال ریکوئست و تغییر state به Pending */ },
+                                onAccept = { /* TODO */ },
+                                onReject = { /* TODO */ },
+                                onWriteReview = { /* TODO */ }
+                            )
+                        }
+
+                        /* ================= InventorySelectScreen ================= */
+                        composable(Route.InventorySelect.value) {
+                            // لیست انبار (دمو)
+                            val inventory = listOf(
+                                com.dibachain.smfn.activity.inventory.InventoryItem("1", painterResource(R.drawable.items1)),
+                                com.dibachain.smfn.activity.inventory.InventoryItem("2", painterResource(R.drawable.items1)),
+                                com.dibachain.smfn.activity.inventory.InventoryItem("3", painterResource(R.drawable.items1)),
+                                com.dibachain.smfn.activity.inventory.InventoryItem("4", painterResource(R.drawable.items1)),
+                            )
+
+                            com.dibachain.smfn.activity.inventory.InventorySelectScreen(
+                                items = inventory,
+                                selectedId = null, // اگر از قبل انتخاب داری اینجا پاس بده
+                                onBack = { nav.popBackStack() },
+                                onAddItem = { /* TODO: مسیر افزودن آیتم جدید */ },
+                                onSelect = { /* اگر لازم داری هر انتخاب را Live ثبت کنی */ },
+                                onDone = { selectedId ->
+                                    // نتیجه را به صفحه‌ی قبلی برگردان
+                                    nav.previousBackStackEntry
+                                        ?.savedStateHandle
+                                        ?.set("selected_item_id", selectedId)
+                                    nav.popBackStack() // ← بازگشت به SwapDetailsScreenV2
+                                },
+                                backIcon = painterResource(R.drawable.ic_swap_back),
+                                addIcon  = painterResource(R.drawable.ic_add_circle) // آیکن اختیاری
+                            )
+                        }
+
+                        /* ================= NotificationScreen ================= */
+                        composable(Route.Notification.value) {
+                            NotificationScreen(
+                                items = demo, // لیست دمو که بالاتر ساختی
+                                onBack = { nav.popBackStack() },
+                                onBell = { /* TODO: mute/mark-all */ },
+                                backIcon = painterResource(R.drawable.ic_swap_back),
+                                bellIcon = painterResource(R.drawable.ic_notification_bing),
+                                bottomItems = bottomItems,                 // 👈 لیست آیکن‌های تو
+                                bottomIndex = currentTabIndex,             // state فعلی
+                                onBottomSelect = {  }
+                            )
+                        }
 
                         // Home → ItemDetail
                         composable(Route.Home.value) {
                             HomeScreen(
                                 onOpenItem = { itemId ->
                                     nav.navigate(Route.ItemDetail(itemId).asRoute())
+                                },
+                                onGetPremiumClick = {                    // 👈 اینجا ناوبری واقعی
+                                    nav.navigate(Route.UpgradePlan.value)
+                                },
+                                onNotifications = {
+                                    nav.navigate(Route.Notification.value)
                                 }
                             )
                         }
@@ -234,7 +377,16 @@ class MainActivity : ComponentActivity() {
                                 onMore = { /* TODO */ }
                             )
                         }
-
+                        composable(Route.UpgradePlan.value) {
+                            UpgradePlanScreen(
+                                onBack = { nav.popBackStack() },
+                                onSubscribe = { /* TODO: خرید یا پرداخت */ },
+                                backIcon = painterResource(R.drawable.ic_swap_back),      // این‌ها را در اپ واقعی با painterResource بده
+                                headerIcon = painterResource(R.drawable.logo_crop),
+                                featureIcon = painterResource(R.drawable.ic_star_plan),
+                                buttonIcon = painterResource(R.drawable.ic_cup)
+                            )
+                        }
                         // Item Detail
                         composable(
                             route = Route.ItemDetail.pattern,
@@ -274,7 +426,7 @@ class MainActivity : ComponentActivity() {
                                 reviews = demoReviews,
                                 summary = demoSummary,
                                 emptyIllustration = painterResource(R.drawable.ic_menu_report_image),
-                                onSwap = {},
+                                onSwap = { nav.navigate(Route.SwapDetailsV2.value) },
                             )
                         }
                     }

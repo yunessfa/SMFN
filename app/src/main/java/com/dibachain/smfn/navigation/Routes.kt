@@ -13,6 +13,10 @@ sealed class Route(val value: String) {
     data object ProfileStep : Route("profile_step")
     data object Home        : Route("home")
     data object SwapDetails        : Route("swap_details")
+    data object UpgradePlan        : Route("upgrade_plan")
+    data object SwapDetailsV2        : Route("swap_details_v2")
+    data object InventorySelect        : Route("inventory_select")
+    data object Notification        : Route("notification")
 
     /** Item Detail with arg */
     data class ItemDetail(val itemId: String) {
