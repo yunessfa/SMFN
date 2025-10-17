@@ -17,6 +17,37 @@ sealed class Route(val value: String) {
     data object SwapDetailsV2        : Route("swap_details_v2")
     data object InventorySelect        : Route("inventory_select")
     data object Notification        : Route("notification")
+    data object Messages        : Route("messages")
+    data object Review        : Route("review")
+    data object Chat : Route("chat/{mode}") {         // 👈 جدید
+        fun of(mode: Int) = "chat/$mode"
+    }
+    data object ProductCreate : Route("product_create")
+    data object ItemPreview : Route("item/preview")
+    data object ProductCreateEdit : Route("product_create_edit")
+    data object ItemDetailBoost : Route("item/detail_boost")  // ⬅️ جدید
+    data object Wallet   : Route("wallet")  // ⬅️ جدید
+    data object Deposit   : Route("deposit")  // ⬅️ جدید
+    data object Profile   : Route("profile")  // ⬅️ جدید
+    data object EditItem   : Route("edited")  // ⬅️ جدید
+    data object AccountInformation   : Route("accountinformation")  // ⬅️ جدید
+    data object AddCollection   : Route("collection")  // ⬅️ جدید
+    data object Boostflow   : Route("boostflow")  // ⬅️ جدید
+    data object Collection   : Route("collection")  // ⬅️ جدید
+    data object Earning   : Route("earning")  // ⬅️ جدید
+    data object EditProfile   : Route("editprofile")  // ⬅️ جدید
+    data object FollowersFollowing   : Route("followersfollowing")  // ⬅️ جدید
+    data object LeaderboardScore   : Route("leaderboardscore")  // ⬅️ جدید
+    data object Subscription   : Route("subscription")  // ⬅️ جدید
+    data object NotificationScreen   : Route("notificationscreen")  // ⬅️ جدید
+    data object FollowingRequestScreen   : Route("followingrequestscreen")  // ⬅️ جدید
+    data object SwapActivityScreen   : Route("swapactivityscreen")  // ⬅️ جدید
+    data object SwapRequestScreen   : Route("swaprequestscreen")  // ⬅️ جدید
+    data object PrivacyAndSafetyScreen   : Route("privacyandsafetyscreen")  // ⬅️ جدید
+    data object ResetReviewWithSheetsScreen   : Route("resetreview")  // ⬅️ جدید
+    data object SelectItemsForCollectionScreen   : Route("selectitemsforcollection")  // ⬅️ جدید
+    data object SettingsScreen   : Route("settings")  // ⬅️ جدید
+    data object ReviewScreen   : Route("review")  // ⬅️ جدید
 
     /** Item Detail with arg */
     data class ItemDetail(val itemId: String) {

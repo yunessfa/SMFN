@@ -43,9 +43,6 @@ fun NotificationScreen(
     onBell: () -> Unit = {},
     backIcon: Painter? = null,
     bellIcon: Painter? = null,
-    bottomItems: List<BottomItem> = emptyList(),   // 👈 جدید
-    bottomIndex: Int = 0,                          // 👈 جدید
-    onBottomSelect: (Int) -> Unit = {}             // 👈 جدید
 ) {
     Column(
         modifier = Modifier
@@ -99,14 +96,6 @@ fun NotificationScreen(
             }
         }
 
-        // --- BottomBar عین خواسته‌ی تو ---
-        GradientBottomBar(
-            items = bottomItems,
-            selectedIndex = bottomIndex,
-            onSelect = onBottomSelect,
-            modifier = Modifier
-                .padding(start = 20.dp, end = 20.dp, bottom = 26.dp)
-        )
     }
 }
 

@@ -17,9 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import com.dibachain.smfn.R
 import androidx.compose.ui.unit.dp
@@ -40,7 +38,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import com.dibachain.smfn.activity.feature.profile.GradientText
@@ -216,13 +213,13 @@ fun FeedWithSliderScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        GradientBottomBar(
-            items = bottomItems,
-            selectedIndex = bottomIndex,
-            onSelect = { idx -> bottomIndex = idx },
-            modifier = Modifier
-                .padding(start = 20.dp, end = 20.dp, bottom = 26.dp)
-        )
+//        GradientBottomBar(
+//            items = bottomItems,
+//            selectedIndex = bottomIndex,
+//            onSelect = { idx -> bottomIndex = idx },
+//            modifier = Modifier
+//                .padding(start = 20.dp, end = 20.dp, bottom = 26.dp)
+//        )
     }
     if (showFilterSheet) {
         ModalBottomSheet(

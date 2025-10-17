@@ -10,10 +10,10 @@ android {
 
     defaultConfig {
         applicationId = "com.dibachain.smfn"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "1.0.0.45"
+        versionCode = 100
+        versionName = "1.53.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -64,6 +64,11 @@ dependencies {
     implementation(libs.androidx.compose.animation.core)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.compose.ui.unit)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.foundation.layout)
+    implementation(libs.androidx.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -743,7 +743,7 @@ private fun FavoriteBadge(
 /* ---------------- کارت فروشنده ---------------- */
 
 @Composable
-private fun SellerCard(
+fun SellerCard(
     avatar: Painter,
     name: String,
     verifiedIcon: Painter?,
@@ -824,7 +824,7 @@ private fun SellerCard(
 /* ---------------- تب‌ها ---------------- */
 
 @Composable
-private fun SegTabs(
+fun SegTabs(
     left: String,
     right: String,
     selected: Int,
@@ -880,7 +880,7 @@ private fun SegTab(text: String, active: Boolean, onClick: () -> Unit, modifier:
 /* ---------------- تیتر سکشن و متن بدنه ---------------- */
 
 @Composable
-private fun SectionTitle(text: String) {
+fun SectionTitle(text: String) {
     Text(
         text = text,
         style = TextStyle(
@@ -896,7 +896,7 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun BodyText(text: String) {
+fun BodyText(text: String) {
     Text(
         text = text,
         style = TextStyle(
@@ -912,7 +912,7 @@ private fun BodyText(text: String) {
 /* ---------------- چیپ‌های Category ---------------- */
 
 @Composable
-private fun FlowChips(items: List<String>) {
+fun FlowChips(items: List<String>) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -962,7 +962,7 @@ private fun FlowRow(
 /* ---------------- دکمه گرادیانی ---------------- */
 
 @Composable
-private fun GradientPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun GradientPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
@@ -1281,59 +1281,59 @@ private fun StarsRow(rating: Float, max: Int = 5) {
 
 ///* ---------------- Preview ---------------- */
 //
-@Preview(showBackground = true)
-@Composable
-private fun ItemDetailScreenPreview() {
-    val demoSummary = RatingsSummary(
-        average = 4.0f,
-        totalReviews = 52,
-        counts = mapOf(5 to 30, 4 to 12, 3 to 6, 2 to 3, 1 to 1)
-    )
-
-    val demoReviews = listOf(
-        Review(painterResource(R.drawable.ic_avatar), "Courtney Henry", 5, "2 mins ago",
-            "Consequat velit qui adipisicing sunt do rependerit ad laborum tempor ullamco exercitation."),
-        Review(painterResource(R.drawable.ic_avatar), "Cameron Williamson", 4, "2 mins ago",
-            "Consequat velit qui adipisicing sunt do rependerit ad laborum tempor ullamco."),
-        Review(painterResource(R.drawable.ic_avatar), "Jane Cooper", 3, "2 mins ago",
-            "Ullamco tempor adipisicing et voluptate duis sit esse aliqua esse ex.")
-    )
-
-    ItemDetailScreen(
-        images = listOf(
-            painterResource(R.drawable.items1),
-            painterResource(R.drawable.items1),
-            painterResource(R.drawable.items1)
-        ),
-        initialTab = 1, // 👈 با این خط، تب Review رو پیش‌فرض باز می‌کنه
-        likeCount = 357,
-        isFavorite = true,
-        backIcon = painterResource(R.drawable.ic_items_back),
-        shareIcon = painterResource(R.drawable.ic_upload_items),
-        moreIcon = painterResource(R.drawable.ic_menu_revert),
-        starIcon = painterResource(R.drawable.ic_menu_agenda),
-
-        title = "Canon4000D",
-        sellerAvatar = painterResource(R.drawable.ic_avatar),
-        sellerName = "Jolie",
-        sellerVerifiedIcon = painterResource(R.drawable.ic_verify),
-        sellerstaricon = painterResource(R.drawable.ic_star_items),
-        sellerRatingText = "N/A",
-        sellerLocation = "Dubai, U.A.E",
-        sellerDistanceText = "(2423) km from you",
-
-        description = "Canon4000D camera rarely used and with all its accessories",
-        conditionTitle = "Good",
-        conditionSub = "Gently used and may have minor cosmetic flaws, fully functional.",
-        valueText = "AED 8500",
-        categories = listOf("Photography", "Cameras"),
-        uploadedAt = "17/09/2025",
-
-        reviews = demoReviews,
-        summary = demoSummary,
-        emptyIllustration = painterResource(R.drawable.ic_menu_report_image),
-
-        onSwap = {}, 
-        onOpenSwapDetails = {}
-    )
-}
+//@Preview(showBackground = true)
+//@Composable
+//private fun ItemDetailScreenPreview() {
+//    val demoSummary = RatingsSummary(
+//        average = 4.0f,
+//        totalReviews = 52,
+//        counts = mapOf(5 to 30, 4 to 12, 3 to 6, 2 to 3, 1 to 1)
+//    )
+//
+//    val demoReviews = listOf(
+//        Review(painterResource(R.drawable.ic_avatar), "Courtney Henry", 5, "2 mins ago",
+//            "Consequat velit qui adipisicing sunt do rependerit ad laborum tempor ullamco exercitation."),
+//        Review(painterResource(R.drawable.ic_avatar), "Cameron Williamson", 4, "2 mins ago",
+//            "Consequat velit qui adipisicing sunt do rependerit ad laborum tempor ullamco."),
+//        Review(painterResource(R.drawable.ic_avatar), "Jane Cooper", 3, "2 mins ago",
+//            "Ullamco tempor adipisicing et voluptate duis sit esse aliqua esse ex.")
+//    )
+//
+//    ItemDetailScreen(
+//        images = listOf(
+//            painterResource(R.drawable.items1),
+//            painterResource(R.drawable.items1),
+//            painterResource(R.drawable.items1)
+//        ),
+//        initialTab = 1, // 👈 با این خط، تب Review رو پیش‌فرض باز می‌کنه
+//        likeCount = 357,
+//        isFavorite = true,
+//        backIcon = painterResource(R.drawable.ic_items_back),
+//        shareIcon = painterResource(R.drawable.ic_upload_items),
+//        moreIcon = painterResource(R.drawable.ic_menu_revert),
+//        starIcon = painterResource(R.drawable.ic_menu_agenda),
+//
+//        title = "Canon4000D",
+//        sellerAvatar = painterResource(R.drawable.ic_avatar),
+//        sellerName = "Jolie",
+//        sellerVerifiedIcon = painterResource(R.drawable.ic_verify),
+//        sellerstaricon = painterResource(R.drawable.ic_star_items),
+//        sellerRatingText = "N/A",
+//        sellerLocation = "Dubai, U.A.E",
+//        sellerDistanceText = "(2423) km from you",
+//
+//        description = "Canon4000D camera rarely used and with all its accessories",
+//        conditionTitle = "Good",
+//        conditionSub = "Gently used and may have minor cosmetic flaws, fully functional.",
+//        valueText = "AED 8500",
+//        categories = listOf("Photography", "Cameras"),
+//        uploadedAt = "17/09/2025",
+//
+//        reviews = demoReviews,
+//        summary = demoSummary,
+//        emptyIllustration = painterResource(R.drawable.ic_menu_report_image),
+//
+//        onSwap = {},
+//        onOpenSwapDetails = {}
+//    )
+//}
