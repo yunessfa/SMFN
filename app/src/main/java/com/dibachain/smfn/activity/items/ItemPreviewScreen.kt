@@ -1,8 +1,5 @@
-// com.dibachain.smfn.activity.items.ItemPublishPreviewScreen.kt
 package com.dibachain.smfn.activity.items
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,92 +14,174 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.dibachain.smfn.R
 import com.dibachain.smfn.activity.feature.product.ProductPayload
+import com.dibachain.smfn.ui.components.AppSnackbarHost
+import com.dibachain.smfn.ui.components.showAppToast
+import kotlinx.coroutines.launch
 
-@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun ItemPublishPreviewScreen(
     payload: ProductPayload,
     onBack: () -> Unit,
-    onPublish: () -> Unit,
-    onEdit: () -> Unit
+    onPublishSuccess: (createdId: String?) -> Unit,  // بعد از موفقیت، مسیر بعدی
+    onEdit: () -> Unit,
+    tokenProvider: () -> String,                      // توکن
+    countryProvider: () -> String ={ payload.location },           // اگر جدا داری از LocationsField
+    cityProvider: () -> String = { payload.location } // شهر از payload یا UI لوکیشن
 ) {
+    val vm: ItemPublishViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val ui by vm.ui.collectAsState()
+
+    val host = remember { SnackbarHostState() }
+
+    // داده های تصویری و متن وضعیت
     val listState = rememberLazyListState()
     val images = remember(payload.cover, payload.photos) { listOf(payload.cover) + payload.photos }
     val painters = images.map { rememberAsyncImagePainter(it) }
+    val scope = rememberCoroutineScope()   // 👈 اضافه کن
 
-    val conditionSub = when (payload.condition) {
-        "Brand new" -> "Never used, sealed, or freshly unboxed."
-        "Like new"  -> "Lightly used and fully functional, with no signs of usage."
-        "Good"      -> "Gently used and may have minor cosmetic flaws, fully functional."
-        "Fair"      -> "Used and has multiple cosmetic flaw,but over all functional"
-        else        -> ""
+    val conditionSub = remember(payload.condition) {
+        when (payload.condition) {
+            "Brand new" -> "Never used, sealed, or freshly unboxed."
+            "Like new"  -> "Lightly used and fully functional, with no signs of usage."
+            "Good"      -> "Gently used and may have minor cosmetic flaws, fully functional."
+            "Fair"      -> "Used and has multiple cosmetic flaw,but over all functional"
+            else        -> ""
+        }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .background(Color(0xFFF8F8F8))
-    ) {
-        item {
-            DetailHeaderSlider(
-                images = painters,
-                likeCount = 0,
-                isFavorite = false,
-                backIcon = painterResource(R.drawable.ic_items_back),
-                shareIcon = painterResource(R.drawable.ic_upload_items),
-                moreIcon = painterResource(R.drawable.ic_menu_revert),
-                starIcon = painterResource(R.drawable.ic_menu_agenda),
-                onBack = onBack,
-                onShare = {},
-                onMore = {},
-                onToggleFavorite = {}
-            )
-        }
-        item {
-            ItemDetailContentNoTabs(
-                title = payload.name,
-                description = payload.description,
-                conditionTitle = payload.condition,
-                conditionSub = conditionSub,
-                valueText = "AED ${payload.valueAed}",
-                categories = payload.categories.map { it.replaceFirstChar { c -> c.uppercase() } },
-                location = payload.location,
-                uploadedAt = java.time.LocalDate.now().toString()
-            )
-        }
-        item { Spacer(Modifier.height(18.dp)) }
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Box(
+    // UI اصلی + Snackbar
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .background(Color(0xFFF8F8F8))
+        ) {
+            item {
+                DetailHeaderSlider(
+                    images = painters,
+                    likeCount = 0,
+                    isFavorite = false,
+                    backIcon = painterResource(R.drawable.ic_items_back),
+                    shareIcon = painterResource(R.drawable.ic_upload_items),
+                    moreIcon = painterResource(R.drawable.ic_menu_revert),
+                    starIcon = painterResource(R.drawable.ic_menu_agenda),
+                    onBack = onBack,
+                    onShare = {},
+                    onMore = {},
+                    onToggleFavorite = {}
+                )
+            }
+            item {
+                ItemDetailContentNoTabs(
+                    title = payload.name,
+                    description = payload.description,
+                    conditionTitle = payload.condition,
+                    conditionSub = conditionSub,
+                    valueText = "AED ${payload.valueAed}",
+                    categories = payload.categories.map { it.replaceFirstChar { c -> c.uppercase() } },
+                    location = payload.location,
+                    uploadedAt = java.time.LocalDate.now().toString()
+                )
+            }
+            item { Spacer(Modifier.height(18.dp)) }
+            item {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(Brush.horizontalGradient(listOf(Color(0xFFFFD25A), Color(0xFF42C695))))
-                        .clickable { onPublish() },
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text("Publish Item", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    // Publish button
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFFFFD25A), Color(0xFF42C695))
+                                )
+                            )
+                            .clickable(enabled = !ui.loading) {
+                                val token = tokenProvider()
+                                val country = countryProvider()
+                                val city = cityProvider()
+
+                                // اعتبارسنجی ساده قبل از کال
+                                if (token.isBlank()) {
+                                    scope.launch { showAppToast(host, "Missing token") }   // ✅ به‌جای LaunchedEffect
+                                    return@clickable
+                                }
+                                if (city.isBlank()) {
+                                    scope.launch { showAppToast(host, "Select a location") } // ✅
+                                    return@clickable
+                                }
+
+                                vm.publish(
+                                    token = token,
+                                    payload = payload,
+                                    country = country,
+                                    city = city
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (ui.loading) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        } else {
+                            Text(
+                                "Publish Item",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    TextButton(
+                        onClick = onEdit,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        enabled = !ui.loading
+                    ) { Text("Edit") }
+
+                    Spacer(Modifier.height(12.dp))
                 }
-                Spacer(Modifier.height(10.dp))
-                TextButton(
-                    onClick = onEdit,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                ) { Text("Edit") }
-                Spacer(Modifier.height(12.dp))
             }
+        }
+
+        // Snackbar host
+        AppSnackbarHost(
+            hostState = host,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 20.dp)
+        )
+    }
+
+    // خطاها
+    LaunchedEffect(ui.error) {
+        ui.error?.let {
+            showAppToast(host, it)
+            vm.clearError()
+        }
+    }
+
+    // موفقیت
+    LaunchedEffect(ui.successId) {
+        ui.successId?.let {
+            showAppToast(host, "Published successfully")
+            onPublishSuccess(it)
         }
     }
 }
@@ -118,62 +197,83 @@ private fun ItemDetailContentNoTabs(
     location: String,
     uploadedAt: String
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Text(text = title, style = MaterialTheme.typography.headlineMedium.copy(color = Color(0xFF292D32)))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium.copy(color = Color(0xFF292D32))
+        )
         Spacer(Modifier.height(18.dp))
+
         SectionTitle("Item Description")
         BodyText(description)
+
         Spacer(Modifier.height(18.dp))
-        SectionTitle("Item Condation") // مطابق طرح
-        Text(conditionTitle, style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32)))
+
+        SectionTitle("Item Condation")
+        Text(
+            conditionTitle,
+            style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32))
+        )
         Spacer(Modifier.height(6.dp))
         BodyText(conditionSub)
+
         Spacer(Modifier.height(18.dp))
+
         SectionTitle("Value")
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(R.drawable.ic_camera_items), contentDescription = null, tint = Color(0xFF292D32))
+            Icon(
+                painterResource(R.drawable.ic_camera_items),
+                contentDescription = null,
+                tint = Color(0xFF292D32)
+            )
             Spacer(Modifier.width(6.dp))
-            Text(valueText, style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32)))
+            Text(
+                valueText,
+                style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32))
+            )
         }
+
         Spacer(Modifier.height(18.dp))
+
         SectionTitle("Category")
-        FlowChips(items = categories)
+        // اگر چیپ داری، اینجا نمایش بده
+        // FlowChips(items = categories)
+
         Spacer(Modifier.height(18.dp))
+
         SectionTitle("Location")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-//            Icon(painterResource(R.drawable.ic_location), contentDescription = null, tint = Color(0xFF292D32))
-//            Spacer(Modifier.width(6.dp))
-            Column {
-                Text(location, style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32)))
-                Text("(0)Km from you", style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFAAAAAA)))
-            }
+        Column {
+            Text(
+                location,
+                style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32))
+            )
+            Text(
+                "(0)Km from you",
+                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFAAAAAA))
+            )
         }
+
         Spacer(Modifier.height(18.dp))
+
         SectionTitle("Uploaded at")
-        Text(uploadedAt, style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32)))
+        Text(
+            uploadedAt,
+            style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32))
+        )
     }
 }
 
-//@RequiresApi(Build.VERSION_CODES.O)
-//@Preview(showBackground = true, backgroundColor = 0xFFF8F8F8)
+/* --- کمک‌کننده‌های ساده‌ی تایپوگرافی؛ اگر جای دیگه داری، حذف کن --- */
 //@Composable
-//private fun ItemPublishPreviewScreen_Preview() {
-//    val fake = ProductPayload(
-//        categories = setOf("Music","Drink"),
-//        name = "Canon4000D",
-//        description = "xvbn",
-//        condition = "Fair",
-//        photos = listOf("https://picsum.photos/seed/1/600/400"),
-//        cover = "https://images.pexels.com/photos/167832/pexels-photo-167832.jpeg",
-//        video = "preview://video",
-//        tags = listOf(),
-//        valueAed = 4501,
-//        location = "Garden City"
-//    )
-//    ItemPublishPreviewScreen(
-//        payload = fake,
-//        onBack = {},
-//        onPublish = {},
-//        onEdit = {}
-//    )
+//private fun SectionTitle(text: String) {
+//    Text(text, style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF8C8C8C)))
+//}
+//
+//@Composable
+//private fun BodyText(text: String) {
+//    Text(text, style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF292D32)))
 //}

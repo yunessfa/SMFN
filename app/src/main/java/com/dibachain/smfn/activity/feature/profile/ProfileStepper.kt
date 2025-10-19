@@ -61,6 +61,9 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Stop
@@ -100,181 +103,198 @@ fun ProfileStepperScreen(
         avatarUri: String?,
         kycVideoUri: String?,
         interests: List<String>
-    ) -> Unit = { _,_,_,_,_,_ -> }
+    ) -> Unit = { _,_,_,_,_,_ -> },
+    vm: ProfileStepperViewModel  // ← ویومدل را از بیرون تزریق کن (Hilt یا ساخت دستی)
 ) {
-    // steps: 0 phone, 1 user/gender, 2 picture, 3 kyc, 4 interests
-    var step by remember { mutableIntStateOf(0) }
+    val ui = vm.ui.collectAsState().value
+    val scope = rememberCoroutineScope()
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        vm.events.collect { e ->
+            when (e) {
+                is ProfileEvent.Toast -> com.dibachain.smfn.ui.components.showAppToast(
+                    snackbar,
+                    e.msg
+                )
 
-    var phone by remember { mutableStateOf("") }
-    var phoneErr by remember { mutableStateOf<String?>(null) }
+                ProfileEvent.Done -> {/* handled by onDone callback بالا */
+                }
 
-    var fullName by remember { mutableStateOf("") }
-    var fullNameErr by remember { mutableStateOf<String?>(null) }
-    var username by remember { mutableStateOf("") }   // همانی که داشتی
-    var userErr by remember { mutableStateOf<String?>(null) }
-    var gender by remember { mutableStateOf("") }
-    var genderErr by remember { mutableStateOf<String?>(null) }
+                ProfileEvent.GoNext -> {}
+            }
+        }
+    }
+    // رویدادها: Toast/Done
+    LaunchedEffect(Unit) {
+        vm.events.collect { e ->
+            when (e) {
+                is ProfileEvent.Toast -> com.dibachain.smfn.ui.components.showAppToast(
+                    snackbar,
+                    e.msg
+                )
 
-    var avatar by remember { mutableStateOf<String?>(null) }
-
-    var kycVideo by remember { mutableStateOf<String?>(null) }
-
-    val selectedInterests = remember { mutableStateListOf<String>() }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .systemBarsPadding()
-            .padding(horizontal = 24.dp)
-    ) {
-        /* top bar + centered stepper */
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 18.dp)
-        ) {
-            // Back button: 14dp margin, 24x24, black
-            CompositionLocalProvider(
-                LocalMinimumInteractiveComponentSize provides Dp.Unspecified
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 14.dp)
-                        .size(24.dp)
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_back_chevron),
-                        contentDescription = "Back",
-                        tint = Color.Black,
-                        modifier = Modifier.size(24.dp)
+                ProfileEvent.Done -> {
+                    onDone(
+                        ui.phone.trim(),
+                        ui.username.trim(),
+                        ui.gender,
+                        ui.avatar,
+                        ui.kycVideo,
+                        ui.interests
                     )
                 }
+
+                ProfileEvent.GoNext -> {} // فعلاً لازم نیست
             }
-            StepBar(
-                current = step,
-                total = 5,
-                modifier = Modifier.align(Alignment.Center)
+        }
+    }
+    LaunchedEffect(ui.step) {
+        if (ui.step == 4) vm.loadParentsIfNeeded()
+    }
+    // ⬇️ اسنک‌بار—استایل شما
+    SnackbarHost(
+        hostState = snackbar,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        snackbar = { data ->
+            com.dibachain.smfn.ui.components.AppSnackbarHost(
+                hostState = snackbar
             )
         }
+    )
 
-        // فاصله ثابت 60 بین استپر و محتوا
-        Spacer(Modifier.height(60.dp))
-        val selectedSubs = remember { mutableStateListOf<String>() }
-
-        /* header / description - centered */
-        val (title, sub) = when (step) {
-            0 -> "Verify mobile number" to "This number may be displayed when you try to make a swap."
-            1 -> "Set the user name" to "Displayed when sharing content"
-            2 -> "Add your picture" to "Displayed when sharing content"
-            3 -> "KYC Verification" to "Place your face in an oval, then start scanning"
-            else -> "Select your interests" to "we'll only show you the things you love"
-        }
-        Text(
-            text = title,
-            fontSize = 28.sp,
-            color = Color.Black,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(Modifier.height(11.dp))
-        Text(
-            text = sub,
-            fontSize = 14.sp,
-            color = Color(0xFF2B2B2B),
-            lineHeight = 18.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        /* step content */
-        when (step) {
-            0 -> StepPhone(
-                phone = phone,
-                onPhone = { phone = it },
-                error = phoneErr
-            )
-
-            1 -> StepPersonalInfo(
-                fullName = fullName,
-                onFullName = { fullName = it },
-                username = username,
-                onUsername = { username = it },
-                gender = gender,
-                onGender = { gender = it },
-                fullNameErr = fullNameErr,
-                userErr = userErr,
-                genderErr = genderErr
-            )
-
-            2 -> StepPictureCard(
-                image = avatar,
-                onPick = { avatar = it },
-                onClear = { avatar = null }
-            )
-
-            3 -> StepKycVideo(
-                videoUri = kycVideo,
-                onRecord = { kycVideo = it },
-                onClear = { kycVideo = null }
-            )
-
-            4 -> StepCategoriesExact(
-                selected = selectedSubs.toMutableSet(), // یا از یک MutableSet نگهداری کن
-                onSelectionChanged = { s ->
-                    selectedSubs.clear(); selectedSubs.addAll(s)
-                },
-                onGetPremiumClick = { onGetPremiumClick() }
-            )
-        }
-
-        // فاصله دکمه از محتوای بالا: 45dp
-        Spacer(Modifier.height(45.dp))
-
-        /* bottom button */
-        GradientButton(
-            text = if (step < 4) "Continue" else "Finish",
-            enabled = when (step) {
-                0 -> phone.isNotBlank()
-                1 -> fullName.isNotBlank() && username.isNotBlank() && gender.isNotBlank()
-                2 -> avatar != null
-                3 -> kycVideo != null
-                else -> selectedSubs.size >= 4
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(28.dp))
-        ) {
-            when (step) {
-                0 -> {
-                    phoneErr = validatePhone(phone)
-                    if (phoneErr == null) step++
-                }
-                1 -> {
-                    fullNameErr = if (fullName.isBlank()) "Required" else null
-                    userErr = if (username.isBlank()) "Required" else null
-                    genderErr = if (gender.isBlank()) "Required" else null
-                    if (fullNameErr == null && userErr == null && genderErr == null) step++
-                }
-                2, 3 -> step++
-                4 -> onDone(
-                    phone.trim(),
-                    username.trim(),
-                    gender,
-                    avatar,
-                    kycVideo,
-                    selectedInterests.toList()
+    Scaffold(
+        snackbarHost = {
+            // دقیقا با همون استایل شما:
+            com.dibachain.smfn.ui.components.AppSnackbarHost(hostState = snackbar,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 24.dp)
                 )
+        }
+    ) { pad ->
+        Column(Modifier.padding(pad)) {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White)
+                    .systemBarsPadding()
+                    .padding(horizontal = 24.dp)
+            ) {
+                // ... (Top bar و StepBar عوض نمی‌شود) ...
+                StepBar(
+                    current = ui.step, total = 5, modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 18.dp)
+                )
+
+                Spacer(Modifier.height(60.dp))
+
+                val (title, sub) = when (ui.step) {
+                    0 -> "Verify mobile number" to "This number may be displayed when you try to make a swap."
+                    1 -> "Set the user name" to "Displayed when sharing content"
+                    2 -> "Add your picture" to "Displayed when sharing content"
+                    3 -> "KYC Verification" to "Place your face in an oval, then start scanning"
+                    else -> "Select your interests" to "we'll only show you the things you love"
+                }
+                Text(
+                    title,
+                    fontSize = 28.sp,
+                    color = Color.Black,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(11.dp))
+                Text(
+                    sub,
+                    fontSize = 14.sp,
+                    color = Color(0xFF2B2B2B),
+                    lineHeight = 18.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(24.dp))
+
+                when (ui.step) {
+                    0 -> StepPhone(
+                        phone = ui.phone,
+                        onPhone = { vm.setPhone(it) },
+                        error = ui.phoneErr
+                    )
+
+                    1 -> StepPersonalInfo(
+                        fullName = ui.fullName,
+                        onFullName = { vm.setFullName(it) },
+                        username = ui.username,
+                        onUsername = { vm.setUsername(it) },
+                        gender = ui.gender,
+                        onGender = { vm.setGender(it) },
+                        fullNameErr = ui.fullNameErr,
+                        userErr = ui.userErr,
+                        genderErr = ui.genderErr
+                    )
+
+                    2 -> StepPictureCard(
+                        image = ui.avatar,
+                        onPick = { vm.setAvatar(it) },
+                        onClear = { vm.setAvatar(null) },
+                        progress = ui.uploadProgress,
+                        done = ui.uploadDone
+                    )
+
+
+                    3 -> StepKycVideo(
+                        videoUri = ui.kycVideo,
+                        onRecord = { vm.setKyc(it) },
+                        onClear  = { vm.setKyc(null) },
+                        progress = ui.kycUploadProgress,   // ⬅️ جدید
+                        done     = ui.kycUploadDone        // ⬅️ جدید
+                    )
+                    4 -> StepCategoriesApi(
+                        ui = ui,
+                        onExpand = { vm.toggleExpand(it) },
+                        onToggleSub = { id ->
+                            val cur = ui.interests.toMutableList()
+                            if (cur.contains(id)) cur.remove(id) else cur.add(id)
+                            vm.setInterests(cur)
+                        },
+                        modifier = Modifier.weight(1f),
+                        onGetPremiumClick = onGetPremiumClick
+                    )
+
+                }
+
+                Spacer(Modifier.height(45.dp))
+
+                // دکمه پایین—بدون تغییر استایل
+                GradientButton(
+                    text = if (ui.step < 4) "Continue" else "Finish",
+                    enabled = when (ui.step) {
+                        0 -> ui.phone.isNotBlank() && !ui.loading
+                        1 -> ui.fullName.isNotBlank() && ui.username.isNotBlank() && ui.gender.isNotBlank() && !ui.loading
+                        2 -> ui.avatar != null && !ui.loading
+                        3 -> ui.kycVideo != null && !ui.loading
+                        else -> ui.interests.size >= 4 && !ui.loading
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                ) {
+                    when (ui.step) {
+                        0 -> vm.submitPhone()
+                        1 -> vm.savePersonalAndNext()
+                        2 -> vm.saveAvatarAndNext()
+                        3 -> vm.saveKycAndNext()
+                        4 -> vm.submitInterestsToServer(onRequirePremium = onGetPremiumClick)
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
             }
         }
-
-        Spacer(Modifier.height(20.dp))
     }
 }
 
@@ -404,7 +424,9 @@ private fun StepPersonalInfo(
 private fun StepPictureCard(
     image: String?,
     onPick: (String?) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    progress: Int? = null,        // null => نمایش نده
+    done: Boolean = false
 ) {
     val ctx = LocalContext.current
 
@@ -434,7 +456,9 @@ private fun StepPictureCard(
             .clip(shape)
             .border(BorderStroke(1.dp, borderClr), shape)
             .background(Color.White)
-            .clickable { openGallery() },
+            .let { m ->
+                if (progress == null) m.clickable { openGallery() } else m // در حال آپلود کلیک غیرفعال
+                 },
         contentAlignment = Alignment.Center
     ) {
         if (image == null) {
@@ -461,6 +485,29 @@ private fun StepPictureCard(
                 loading = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } },
                 error = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Failed to load image", color = Color.Red) } }
             )
+            if (progress == null) {
+                IconButton(
+                    onClick = onClear,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = .45f))
+                ) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = "clear", tint = Color.White)
+                }
+            }
+            if (progress != null) {
+                UploadBar(
+                    percent = progress,
+                    done = done,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(12.dp)
+                        .fillMaxWidth()
+                )
+            }
             IconButton(
                 onClick = onClear,
                 modifier = Modifier
@@ -661,7 +708,9 @@ private fun GenderFieldExact(
 private fun StepKycVideo(
     videoUri: String?,
     onRecord: (String?) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    progress: Int? = null,
+    done: Boolean = false
 ) {
     val ctx = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -819,7 +868,7 @@ private fun StepKycVideo(
         Spacer(Modifier.height(16.dp))
 
         // دکمه قرمز گرد پایین کارت (فقط در حالت پیش‌نمایش/ضبط)
-        if (hasPerm && showPreview) {
+        if (hasPerm && showPreview && progress == null) {
             Box(
                 modifier = Modifier
                     .size(72.dp)
@@ -852,6 +901,18 @@ private fun StepKycVideo(
                         modifier = Modifier.size(28.dp)
                     )
                 }
+                // ... درون Box کارت ...
+                if (progress != null) {
+                    UploadBar(
+                        percent = progress,
+                        done = done,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(12.dp)
+                            .fillMaxWidth()
+                    )
+                }
+
             }
         }
     }
@@ -887,7 +948,214 @@ private fun OvalMaskOverlay() {
         )
     }
 }
+@Composable
+ fun StepCategoriesApi(
+    ui: ProfileUiState,
+    onExpand: (String) -> Unit,
+    onToggleSub: (String) -> Unit,
+    onGetPremiumClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cardStroke = Color(0xFFECECEC)
 
+    // والدها هنوز نیومدن → اسپینر
+    if (ui.catLoading && ui.parents.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.dp, cardStroke, RoundedCornerShape(16.dp))
+                .background(Color.White)
+                .height(160.dp),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(1.dp, cardStroke, RoundedCornerShape(16.dp))
+            .background(Color.White)
+            .padding(vertical = 6.dp)
+    ) {
+        // ⬅️ به‌جای items(ui.parents){...} از forEach روی LazyListScope استفاده می‌کنیم
+        ui.parents.forEach { parent ->
+            val parentId = parent.id
+            val isExpanded = ui.expandedKey == parentId
+            val hasAnySelected =
+                ui.childrenByParent[parentId]?.any { it.id in ui.interests } == true
+
+            // هدرِ هر والد
+            item(key = "parent-$parentId") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clickable { onExpand(parentId) }
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ParentIcon(url = parent.icon)
+                    Spacer(Modifier.width(12.dp))
+
+                    if (parent.isPremium) {
+                        Text(
+                            parent.name,
+                            color = Gold,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else if (hasAnySelected) {
+                        Box(Modifier.weight(1f)) { GradientText(parent.name, 16) }
+                    } else {
+                        Text(
+                            parent.name,
+                            color = Inactive,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    val rot = if (isExpanded) 90f else 0f
+                    Icon(
+                        painterResource(R.drawable.arrow_right),
+                        contentDescription = null,
+                        tint = if (parent.isPremium) Gold else Inactive.copy(alpha = .6f),
+                        modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = rot }
+                    )
+                }
+            }
+
+            // محتوای expand شده (همچنان در LazyListScope)
+            if (isExpanded) {
+                if (parent.isPremium) {
+                    // دکمه پرمیوم
+                    item(key = "premium-$parentId") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PremiumOutlineButton(
+                                text = "Get SMFN Premium",
+                                iconRes = R.drawable.logo_crop,
+                                onClick = onGetPremiumClick,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                } else {
+                    val children = ui.childrenByParent[parentId]
+                    // لودینگ بچه‌ها (فقط وقتی همین والد در حال لود است)
+                    if (children == null && ui.loadingChildrenFor == parentId) {
+                        item(key = "loading-$parentId") {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) { CircularProgressIndicator() }
+                        }
+                    }
+                    // لیست بچه‌ها
+                    if (children != null) {
+                        items(
+                            items = children,
+                            key = { child -> "child-$parentId-${child.id}" }
+                        ) { sub ->
+                            val on = sub.id in ui.interests
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onToggleSub(sub.id) }
+                                    .padding(
+                                        start = 48.dp,
+                                        end = 12.dp,
+                                        top = 10.dp,
+                                        bottom = 10.dp
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SubIcon(url = sub.icon, selected = on)
+                                Spacer(Modifier.width(10.dp))
+                                if (on) {
+                                    GradientText(sub.name, 15, FontWeight.Medium)
+                                } else {
+                                    Text(sub.name, color = Inactive, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(Modifier.height(8.dp)) }
+    }
+}
+
+
+private fun itemPremium(onGetPremiumClick: () -> Unit) {
+//    item {
+//        Box(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(horizontal = 20.dp, vertical = 10.dp),
+//            contentAlignment = Alignment.Center
+//        ) {
+//            PremiumOutlineButton(
+//                text = "Get SMFN Premium",
+//                iconRes = R.drawable.logo_crop,
+//                onClick = onGetPremiumClick,
+//                modifier = Modifier.fillMaxWidth()
+//            )
+////        }
+//    }
+}
+
+private fun itemLoadingChildren() {
+//    item {
+
+//    }
+}
+
+
+@Composable
+private fun ParentIcon(url: String?) {
+    val size = 24.dp
+    if (url.isNullOrBlank()) {
+        Icon(painterResource(R.drawable.home_placeholder), contentDescription = null, tint = Inactive, modifier = Modifier.size(size))
+        return
+    }
+    coil.compose.SubcomposeAsyncImage(
+        model = url,
+        contentDescription = null,
+        modifier = Modifier.size(size),
+        loading = { CircularProgressIndicator(strokeWidth = 1.5.dp, modifier = Modifier.size(size)) },
+        error = { Icon(painterResource(R.drawable.home_placeholder), contentDescription = null, tint = Inactive, modifier = Modifier.size(size)) }
+    )
+}
+
+@Composable
+private fun SubIcon(url: String?, selected: Boolean) {
+    val size = 18.dp
+    if (url.isNullOrBlank()) {
+        Icon(painterResource(R.drawable.home_placeholder), contentDescription = null, tint = if (selected) Color.Unspecified else Inactive.copy(alpha = .75f), modifier = Modifier.size(size))
+        return
+    }
+    coil.compose.SubcomposeAsyncImage(
+        model = url,
+        contentDescription = null,
+        modifier = Modifier.size(size),
+        loading = { CircularProgressIndicator(strokeWidth = 1.dp, modifier = Modifier.size(size)) },
+        error = { Icon(painterResource(R.drawable.home_placeholder), contentDescription = null, tint = Inactive.copy(alpha = .75f), modifier = Modifier.size(size)) }
+    )
+}
 
 
 /* ---------- Colors (put near your theme bits) ---------- */
@@ -1097,7 +1365,49 @@ fun StepCategoriesExact(
             }
         }
     }
+}@Composable
+private fun UploadBar(percent: Int, done: Boolean, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.9f))
+            .padding(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "${percent.coerceIn(0,100)}%",
+                color = Color.Black,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (done) "Completed" else "Uploading",
+                color = Color(0xFF6B6B6B),
+                fontSize = 12.sp
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        // Track
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFFE6E6E6))
+        ) {
+            // Fill (از گرادیان اصلی دکمه‌ها استفاده می‌کنیم)
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(fraction = percent / 100f)
+                    .clip(RoundedCornerShape(50))
+                    .background(Brush.linearGradient(listOf(Color(0xFFFFC753), Color(0xFF4AC0A8))))
+            )
+        }
+    }
 }
+
 
 @Composable
 private fun PremiumOutlineButton(

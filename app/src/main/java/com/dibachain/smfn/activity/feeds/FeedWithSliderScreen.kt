@@ -1,34 +1,36 @@
+// activity/feeds/FeedWithSliderScreen.kt
 package com.dibachain.smfn.activity.feeds
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import com.dibachain.smfn.R
 import androidx.compose.ui.unit.dp
-import com.dibachain.smfn.ui.components.*
+import com.dibachain.smfn.R
+import com.dibachain.smfn.ui.components.BottomItem
+import com.dibachain.smfn.ui.components.Media
+import com.dibachain.smfn.ui.components.MediaSlider
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.navigation.NavController
 
-import androidx.compose.ui.res.painterResource
-import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -48,14 +50,12 @@ import com.dibachain.smfn.navigation.Route
 @Composable
 private fun TopRow(
     avatar: Painter,
-    // برچسب‌های دکمه‌ها
     leftLabel: String = "Global",
     rightLabel: String = "Following",
     selectedTab: Int,
     onTabSelected: (Int) -> Unit,
-    // آیکون‌های سمت راست
-    rightIcon1: Painter?, // مثلاً سرچ
-    rightIcon2: Painter?, // مثلاً اعلان
+    rightIcon1: Painter?,
+    rightIcon2: Painter?,
     onRightIcon1: () -> Unit,
     onRightIcon2: () -> Unit
 ) {
@@ -66,7 +66,6 @@ private fun TopRow(
             .padding(top = 24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // آواتار 37x37 گرد
         Image(
             painter = avatar,
             contentDescription = null,
@@ -77,27 +76,14 @@ private fun TopRow(
 
         Spacer(Modifier.width(12.dp))
 
-        // دکمه‌های سگمنت: هر کدام 119x40، رادیوس 40
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SegButton(
-                text = leftLabel,
-                active = selectedTab == 0,
-                onClick = { onTabSelected(0) }
-            )
-            SegButton(
-                text = rightLabel,
-                active = selectedTab == 1,
-                onClick = { onTabSelected(1) }
-            )
+            SegButton(text = leftLabel, active = selectedTab == 0) { onTabSelected(0) }
+            SegButton(text = rightLabel, active = selectedTab == 1) { onTabSelected(1) }
         }
 
         Spacer(Modifier.weight(1f))
 
-        // آیکون‌های سمت راست چسبیده به لبه راست
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             SmallIcon(painter = rightIcon1, onClick = onRightIcon1)
             SmallIcon(painter = rightIcon2, onClick = onRightIcon2)
         }
@@ -137,17 +123,14 @@ private fun SmallIcon(
     painter: Painter?,
     onClick: () -> Unit
 ) {
-    // حداقل سایز تعاملی را آزاد می‌کنیم تا دقیقاً همان ابعاد دربیاید
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-        Box(
-            modifier = Modifier
-                .size(24.dp) // خودت گفتی آیکون‌هات 31x31 هستن
-                .clickable(enabled = painter != null) { onClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            if (painter != null) {
-                Image(painter = painter, contentDescription = null, modifier = Modifier.size(24.dp))
-            }
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .clickable(enabled = painter != null) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (painter != null) {
+            Image(painter = painter, contentDescription = null, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -162,9 +145,18 @@ fun FeedWithSliderScreen(
     rightIcon2: Painter? = null,
     sliderItems: List<Media>,
     bottomItems: List<BottomItem>,
-    onGetPremiumClick: () -> Unit = {} ,         // 👈 اضافه شد
-    onOpenItem: (index: Int, media: Media) -> Unit = { _, _ -> },
-    onNotifications: () -> Unit = {}
+
+    onGetPremiumClick: () -> Unit = {},
+    onOpenItem: (index: Int, media: Media) -> Unit = { _, _ -> }, // برای سازگاری
+    onNotifications: () -> Unit = {},
+
+
+    isFavorite: (index: Int) -> Boolean = { false },
+    onToggleFavorite: (index: Int, media: Media, willBeFavorite: Boolean) -> Unit = { _,_,_ -> },
+
+    // کال‌بک‌های پاس‌ترو به MediaSlider
+    onOpenItemIcon: (index: Int, media: Media) -> Unit = onOpenItem,
+    onSkipNext: (index: Int, media: Media) -> Unit = { _, _ -> },
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var bottomIndex by remember { mutableIntStateOf(0) }
@@ -177,12 +169,10 @@ fun FeedWithSliderScreen(
 
     val genders = listOf("Male", "Female", "Other")
     val categories = listOf("Tech", "Art", "Sports", "Music", "Gaming", "News")
-
-
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFFFFFF))
+            .background(Color(0xFFF8F5F8))
             .systemBarsPadding()
     ) {
         TopRow(
@@ -196,31 +186,31 @@ fun FeedWithSliderScreen(
         )
 
         Spacer(Modifier.height(21.dp))
+
         MediaSlider(
             items = sliderItems,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
-            leftIcon1 = painterResource(R.drawable.ic_menu_manage),
+
+            // علاقه‌مندی با دو آیکن
+            favIconInactive = painterResource(R.drawable.ic_menu_manage_out),
+            favIconActive   = painterResource(R.drawable.ic_menu_manage),
+            isFavorite      = isFavorite,
+            onToggleFavorite = onToggleFavorite,
+
+            // بقیه آیکن‌ها
             leftIcon2 = painterResource(R.drawable.ic_menu_share),
             rightIcon = painterResource(R.drawable.ic_menu_close_clear_cancel),
-            onLeftIcon1Click = { },
-            onLeftIcon2Click = { },
-            onRightIconClick = { },
-            onItemClick = { i, m ->  onOpenItem(i, m) }
+
+            onItemClick     = onOpenItemIcon,  // 👁️
+            onRightIconNext = onSkipNext       // ⏭️
         )
 
-
         Spacer(Modifier.height(20.dp))
-
-//        GradientBottomBar(
-//            items = bottomItems,
-//            selectedIndex = bottomIndex,
-//            onSelect = { idx -> bottomIndex = idx },
-//            modifier = Modifier
-//                .padding(start = 20.dp, end = 20.dp, bottom = 26.dp)
-//        )
+        // Bottom bar اگر لازم شد...
     }
+
     if (showFilterSheet) {
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
@@ -244,60 +234,13 @@ fun FeedWithSliderScreen(
                 premiumIcon = painterResource(R.drawable.logo_without_text), // 👈 آیکن عینک
                 onGetPremium = {
                     onGetPremiumClick()
-                        showFilterSheet = false
+                    showFilterSheet = false
                 },
             )
         }
     }
 }
 
-
-/* ---------------- Preview () ---------------- */
-
-//@Preview(showBackground = true, backgroundColor = 0xFFF8F5F8)
-//@Composable
-//private fun FeedWithSliderScreenPreview() {
-//    val avatar = rememberVectorPainter(Icons.Filled.Person)
-//
-//    val sliderDemo = listOf(
-//        Media.Res(android.R.drawable.ic_menu_camera),
-//        Media.Res(android.R.drawable.ic_menu_gallery),
-//        Media.Res(android.R.drawable.ic_menu_compass),
-//        Media.Res(android.R.drawable.ic_menu_report_image)
-//    )
-//
-//    // آیکون‌های راست (نمونه، تو پروژه خودت ریسورس می‌گذاری)
-//    val right1 = rememberVectorPainter(Icons.Outlined.Search)
-//    val right2 = rememberVectorPainter(Icons.Outlined.Notifications)
-//
-//    val bottomItems = listOf(
-//        BottomItem("home",
-//            activePainter = rememberVectorPainter(Icons.Outlined.Search),
-//            inactivePainter = rememberVectorPainter(Icons.Filled.Search)
-//        ),
-//        BottomItem("add",
-//            activePainter = rememberVectorPainter(Icons.Outlined.Notifications),
-//            inactivePainter = rememberVectorPainter(Icons.Filled.Notifications)
-//        ),
-//        BottomItem("chat",
-//            activePainter = rememberVectorPainter(Icons.Outlined.Search), // فقط برای نمایش
-//            inactivePainter = rememberVectorPainter(Icons.Filled.Search)
-//        ),
-//        BottomItem("profile",
-//            activePainter = rememberVectorPainter(Icons.Outlined.Notifications),
-//            inactivePainter = rememberVectorPainter(Icons.Filled.Notifications)
-//        ),
-//    )
-//
-//    FeedWithSliderScreen(
-//        avatar = avatar,
-//        rightIcon1 = right1,
-//        rightIcon2 = right2,
-//        sliderItems = sliderDemo,
-//        bottomItems = bottomItems
-//    )
-//}
-///* ============ BottomSheet جدید با آکاردئون و سرچ قرصی ============ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterBottomSheetContent(
@@ -536,7 +479,7 @@ private fun AccordionHeader(
                 fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
                 fontWeight = FontWeight(400),
                 color = Color(0xFF292D32),
-                ),
+            ),
             modifier = Modifier.weight(1f)
         )
         // آیکن فلش بالا/پایین (می‌تونی ریسورس خودت رو جایگزین کنی)
@@ -582,7 +525,7 @@ private fun SearchPill(
                 fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
                 fontWeight = FontWeight(400),
                 color = Color(0xFF292D32),
-                ),
+            ),
             cursorBrush = SolidColor(Color(0xFF2B2B2B)),
             decorationBox = { inner ->
                 Row(
@@ -640,11 +583,11 @@ private fun GradientDoneButton(
             ) {
                 Text(text = text,
                     style = TextStyle(
-                    fontSize = 16.sp,
-                    fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-                    fontWeight = FontWeight(600),
-                    color = Color(0xFFFFFFFF)
-                ))
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                        fontWeight = FontWeight(600),
+                        color = Color(0xFFFFFFFF)
+                    ))
             }
         }
     } else {
@@ -660,10 +603,10 @@ private fun GradientDoneButton(
             )
         ) { Text(text ,
             style = TextStyle(
-            fontSize = 16.sp,
-            lineHeight = 22.4.sp,
-            fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-            fontWeight = FontWeight(600),
+                fontSize = 16.sp,
+                lineHeight = 22.4.sp,
+                fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                fontWeight = FontWeight(600),
                 color = Color(0xFFFFFFFF)
             )) }
     }
@@ -780,41 +723,4 @@ private fun SquaredCheckbox(
         }
     }
 }
-//
-//@Preview(showBackground = true, backgroundColor = 0xFFF8F8F8)
-//@Composable
-//private fun FilterBottomSheetContentPreview() {
-//    // داده‌های تستی
-//    val genders = listOf("Men", "Women", "Others")
-//    val categories = listOf(
-//        "Water sport",
-//        "Women's Fashion",
-//        "Electronics",
-//        "Gaming",
-//        "Photography"
-//    )
-//
-//    // stateهای تستی برای Preview
-//    var selectedGender by remember { mutableStateOf<String?>(null) }
-//    var selectedCategory by remember { mutableStateOf<String?>(null) }
-//
-//    // شبیه‌سازی حالت BottomSheet در Preview
-//    Surface(
-//        modifier = Modifier
-//            .fillMaxWidth()
-//            .background(Color.White)
-//            .padding(vertical = 16.dp)
-//    ) {
-//        FilterBottomSheetContent(
-//            genders = genders,
-//            categories = categories,
-//            selectedGender = selectedGender,
-//            selectedCategory = selectedCategory,
-//            onGenderChange = { selectedGender = it },
-//            onCategoryChange = { selectedCategory = it },
-//            onApply = { g, c ->
-//                println("Applied filters: gender=$g, category=$c")
-//            }
-//        )
-//    }
-//}
+

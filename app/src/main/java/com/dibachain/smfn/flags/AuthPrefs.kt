@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 private val Context.authDataStore by preferencesDataStore("auth_prefs")
 
 class AuthPrefs(private val context: Context) {
+
     companion object {
         private val KEY_TOKEN = stringPreferencesKey("auth_token")
     }

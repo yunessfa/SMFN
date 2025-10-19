@@ -162,7 +162,7 @@ fun ItemDetailBoostScreen(
                 Spacer(Modifier.height(18.dp))
 
                 SectionTitle("Category")
-                FlowChips(items = payload.categories.map { it.replaceFirstChar { c -> c.uppercase() } })
+//                FlowChips(items = payload.categories.map { it.replaceFirstChar { c -> c.uppercase() } })
 
                 Spacer(Modifier.height(18.dp))
 
@@ -570,21 +570,21 @@ private fun BoostItemSheetBody(
 //    )
 //    Surface { ItemDetailBoostScreen(fake, onBack = {}) }
 //}
-@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 760)
-@Composable
-private fun BoostSheet_FakePreview_Empty() {
-    // حالت اولیه – بدون مقدار، دکمه Boost غیرفعال
-    Surface {
-        BoostItemSheetBody(
-            sellerName = "Jolie",
-            sellerLocation = "Dubai, U.A.E",
-            balanceSmfn = 0,
-            onDismiss = {},
-            onGoWallet = {},
-            onBoost = { _, _, _ -> }
-        )
-    }
-}
+//@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 760)
+//@Composable
+//private fun BoostSheet_FakePreview_Empty() {
+//    // حالت اولیه – بدون مقدار، دکمه Boost غیرفعال
+//    Surface {
+//        BoostItemSheetBody(
+//            sellerName = "Jolie",
+//            sellerLocation = "Dubai, U.A.E",
+//            balanceSmfn = 0,
+//            onDismiss = {},
+//            onGoWallet = {},
+//            onBoost = { _, _, _ -> }
+//        )
+//    }
+//}
 
 //@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 760)
 //@Composable
@@ -607,18 +607,18 @@ private fun BoostSheet_FakePreview_Empty() {
 //    }
 //}
 
-@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 760)
-@Composable
-private fun BoostSheet_FakePreview_Sufficient() {
-    // موجودی کافی → دکمه Boost فعال
-    Surface {
-        BoostItemSheetBody(
-            sellerName = "Jolie",
-            sellerLocation = "Dubai, U.A.E",
-            balanceSmfn = 1_000_000, // موجودی زیاد
-            onDismiss = {},
-            onGoWallet = {},
-            onBoost = { _, _, _ -> }
-        )
-    }
-}
+//@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 760)
+//@Composable
+//private fun BoostSheet_FakePreview_Sufficient() {
+//    // موجودی کافی → دکمه Boost فعال
+//    Surface {
+//        BoostItemSheetBody(
+//            sellerName = "Jolie",
+//            sellerLocation = "Dubai, U.A.E",
+//            balanceSmfn = 1_000_000, // موجودی زیاد
+//            onDismiss = {},
+//            onGoWallet = {},
+//            onBoost = { _, _, _ -> }
+//        )
+//    }
+//}

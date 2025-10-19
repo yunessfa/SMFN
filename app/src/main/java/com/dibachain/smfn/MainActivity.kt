@@ -1,5 +1,6 @@
 package com.dibachain.smfn
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,8 +19,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -44,6 +49,7 @@ import com.dibachain.smfn.activity.HomeScreen
 import com.dibachain.smfn.activity.edit.EditItemScreen
 import com.dibachain.smfn.activity.edit.EditableItem
 import com.dibachain.smfn.activity.feature.product.ProductCreateWizard
+import com.dibachain.smfn.activity.feature.profile.ProfileStepperViewModel
 import com.dibachain.smfn.activity.inventory.InventoryItem
 import com.dibachain.smfn.activity.inventory.InventorySelectScreen
 import com.dibachain.smfn.activity.items.ItemDetailScreen
@@ -88,6 +94,7 @@ import com.dibachain.smfn.activity.profile.ItemCardUi
 import com.dibachain.smfn.activity.profile.LeaderboardRowUi
 import com.dibachain.smfn.activity.profile.LeaderboardScoreScreen
 import com.dibachain.smfn.activity.profile.PrivacyAndSafetyScreen
+import com.dibachain.smfn.activity.profile.ProfileRoute
 import com.dibachain.smfn.activity.profile.ProfileScreen
 import com.dibachain.smfn.activity.profile.ProfileStats
 import com.dibachain.smfn.activity.profile.ResetReviewWithSheetsScreen
@@ -104,10 +111,14 @@ import com.dibachain.smfn.activity.profile.demoAvatar
 import com.dibachain.smfn.activity.profile.demoThumb
 import com.dibachain.smfn.activity.profile.mock
 import com.dibachain.smfn.activity.profile.mockSummary
+import com.dibachain.smfn.activity.swap.SwapFlowViewModel
 import com.dibachain.smfn.activity.wallet.DepositScreen
 import com.dibachain.smfn.activity.wallet.TxStatus
 import com.dibachain.smfn.activity.wallet.WalletScreen
 import com.dibachain.smfn.activity.wallet.WalletTx
+import com.dibachain.smfn.common.Result
+import com.dibachain.smfn.data.Repos
+import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 
 
@@ -116,6 +127,8 @@ import java.time.LocalDate
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Repos.init(application)
+
         enableEdgeToEdge()
 
         val onboardingPrefs = OnboardingPrefs(this)
@@ -170,26 +183,63 @@ class MainActivity : ComponentActivity() {
                     MessageItem("6", ava, "Theresa Webb", "I am sad", "Sat"),
                     MessageItem("7", ava, "Dianne Russell", "Reminder of our meeting has been sent to…", "Sat")
                 )
+                // 🔸 VM مشترک فلو سواپ (خارج از NavHost تا بین اسکرین‌ها share شود)
+                val swapVm = viewModel<SwapFlowViewModel>(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return SwapFlowViewModel(
+                                app = this@MainActivity.application,
+                                authRepo = Repos.authRepository,
+                                inventoryRepo = Repos.inventoryRepository,
+                                offersRepo = Repos.offersRepository,
+                                tokenProvider = { AuthPrefs(this@MainActivity).token.first() }
+                            ) as T
+                        }
+                    }
+                )
+
                 Surface(color = MaterialTheme.colorScheme.background) {
                     NavHost(navController = nav, startDestination = Route.SplashWhite.value) {
 
                         // Splash سفید → تصمیم مسیر
                         composable(Route.SplashWhite.value) {
+                            // ✅ اضافه
+                            val repo = remember { Repos.authRepository }
+
                             WhiteSplashScreen()
                             LaunchedEffect(Unit) {
                                 delay(2000)
-                                when {
-                                    token.isNotBlank() -> {
-                                        nav.navigate(Route.Home.value) {
-                                            popUpTo(Route.SplashWhite.value) { inclusive = true }
+
+                                if (token.isNotBlank()) {
+                                    // 1) پروفایل را با همان توکن چک کن
+                                    when (val me = repo.getSelf(token)) {
+                                        is Result.Success -> {
+                                            val verified = me.data.isKycVerified == true
+                                            if (verified) {
+                                                nav.navigate(Route.Home.value) {
+                                                    popUpTo(Route.SplashWhite.value) { inclusive = true }
+                                                }
+                                            } else {
+                                                nav.navigate(Route.ProfileStep.value) {
+                                                    popUpTo(Route.SplashWhite.value) { inclusive = true }
+                                                }
+                                            }
+                                        }
+                                        is Result.Error -> {
+                                            // توکن نامعتبر/شبکه: برو لاگین
+                                            nav.navigate(Route.Login.value) {
+                                                popUpTo(Route.SplashWhite.value) { inclusive = true }
+                                            }
                                         }
                                     }
-                                    !shown -> {
+                                } else {
+                                    // 2) توکن نداریم → مثل قبل
+                                    if (!shown) {
                                         nav.navigate(Route.Onboarding.value) {
                                             popUpTo(Route.SplashWhite.value) { inclusive = true }
                                         }
-                                    }
-                                    else -> {
+                                    } else {
                                         nav.navigate(Route.SplashOld.value) {
                                             popUpTo(Route.SplashWhite.value) { inclusive = true }
                                         }
@@ -197,6 +247,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+
 
                         composable(Route.SplashOld.value) {
                             SplashScreen(
@@ -221,11 +272,44 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Route.Login.value) {
+                            val repo = remember { com.dibachain.smfn.data.Repos.authRepository }
+                            val authPrefs = remember { AuthPrefs(this@MainActivity) }
+
                             LoginScreen(
-                                onLogin = { _, _ ->
-                                    authPrefs.setToken("REPLACE_WITH_REAL_TOKEN") // اگر suspend بود اینجا await می‌شود
-                                    nav.navigate(Route.Home.value) {
-                                        popUpTo(Route.Login.value) { inclusive = true }
+                                onLogin = { email, pass ->
+                                    when (val res = repo.login(email, pass)) {
+                                        is com.dibachain.smfn.common.Result.Success -> {
+                                            // 1) ذخیره توکن
+                                            authPrefs.setToken(res.data)
+
+                                            // 2) چک KYC
+                                            when (val me = repo.getSelf(res.data)) {   // ← از همون توکنی که گرفتیم استفاده کن
+                                                is com.dibachain.smfn.common.Result.Success -> {
+                                                    val verified = me.data.isKycVerified == true
+                                                    if (verified) {
+                                                        nav.navigate(Route.Home.value) {
+                                                            popUpTo(Route.Login.value) { inclusive = true }
+                                                        }
+                                                    } else {
+                                                        nav.navigate(Route.ProfileStep.value) {   // ← ویزارد KYC
+                                                            popUpTo(Route.Login.value) { inclusive = true }
+                                                        }
+                                                    }
+                                                }
+                                                is com.dibachain.smfn.common.Result.Error -> {
+                                                    // اگر پروفایل نگرفتیم، می‌تونی بفرستی KYC یا پیام بدهی.
+                                                    // من محافظه‌کارانه می‌فرستم KYC:
+                                                    nav.navigate(Route.ProfileStep.value) {
+                                                        popUpTo(Route.Login.value) { inclusive = true }
+                                                    }
+                                                    // یا: throw IllegalStateException(me.message)
+                                                }
+                                            }
+                                        }
+                                        is com.dibachain.smfn.common.Result.Error -> {
+                                            // LoginScreen خودش exception رو Snackbar می‌کنه
+                                            throw IllegalStateException(res.message)
+                                        }
                                     }
                                 },
                                 onForgotPassword = { nav.navigate(Route.Forgot.value) },
@@ -233,146 +317,222 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-
                         composable(Route.Forgot.value) {
                             ForgetPasswordScreen(
-                                onNext = { nav.navigate(Route.Verify.value) }
+                                onNext = { email, token ->
+                                    nav.currentBackStackEntry?.savedStateHandle?.set("fp_email", email)
+                                    nav.currentBackStackEntry?.savedStateHandle?.set("fp_token", token)
+                                    nav.navigate(Route.Verify.value)
+                                }
                             )
                         }
-
-                        composable(Route.Verify.value) {
+                        composable(Route.Verify.value) { backStackEntry ->
+                            val email = nav.previousBackStackEntry
+                                ?.savedStateHandle?.get<String>("fp_email").orEmpty()
+                            val token = nav.previousBackStackEntry
+                                ?.savedStateHandle?.get<String>("fp_token").orEmpty()
                             VerificationCodeScreen(
-                                onNext = { nav.navigate(Route.SetNewPass.value) },
-                                onResend = { /* TODO */ }
+                                onNext = { code ->
+                                    nav.currentBackStackEntry?.savedStateHandle?.set("fp_email", email)
+                                    nav.currentBackStackEntry?.savedStateHandle?.set("fp_code", code)
+                                    nav.currentBackStackEntry?.savedStateHandle?.set("fp_token", token)
+                                    nav.navigate(Route.SetNewPass.value)
+                                },
+                                onResend = {}
                             )
                         }
-
-                        composable(Route.SetNewPass.value) {
+                        composable(Route.SetNewPass.value) { backStackEntry ->
+                            val email = backStackEntry.savedStateHandle.get<String>("fp_email").orEmpty()
+                            val code = backStackEntry.savedStateHandle.get<String>("fp_code").orEmpty()
+                            val token = backStackEntry.savedStateHandle.get<String>("fp_token").orEmpty()
                             SetNewPasswordScreen(
-                                onDone = { nav.popBackStack(Route.Login.value, inclusive = false) }
+                                email = email,
+                                code = code,
+                                token = token,
+                                onDone = {
+                                    nav.popBackStack(Route.Login.value, inclusive = false)
+                                }
                             )
                         }
-
                         composable(Route.SignUp.value) {
+                            val repo = remember { Repos.authRepository }
+
                             SignUpScreen(
-                                onSignUp = { _, _ -> nav.navigate(Route.SignUpVerify.value) },
+                                onSignUp = { email, pass ->
+                                    when (val r = repo.register(email, pass)) {
+                                        is Result.Success -> {
+                                            authPrefs.setToken(r.data)    // suspend
+                                            nav.navigate(Route.SignUpVerify.value) {
+                                                popUpTo(Route.SignUp.value) { inclusive = true }
+                                            }
+                                        }
+                                        is Result.Error -> {
+                                            throw IllegalStateException(r.message)  // Snackbar داخل صفحه نشان می‌دهد
+                                        }
+                                    }
+                                },
                                 onBackToLogin = { nav.popBackStack() }
                             )
                         }
 
                         composable(Route.SignUpVerify.value) {
                             VerificationCodeSignupScreen(
-                                onNext = {
+                                onNextSuccess = {
                                     nav.navigate(Route.ProfileStep.value) {
-                                        popUpTo(Route.Login.value) { inclusive = false }
+                                        // اگر می‌خوای دیگه به صفحه‌ی Verify برنگرده:
+                                        popUpTo(Route.SignUpVerify.value) { inclusive = true }
                                     }
-                                },
-                                onResend = { /* TODO */ }
+                                }
                             )
                         }
 
-                        composable(Route.ProfileStep.value) {
 
-                            val scope = rememberCoroutineScope() // ✅ بیرون از onDone
+
+                        composable(Route.ProfileStep.value) {
+                            val app = LocalContext.current.applicationContext as Application
+                            val repo = remember { Repos.authRepository }
+                            val authPrefs = remember { AuthPrefs(this@MainActivity) }
+                            val catRepo = remember { Repos.categoryRepository }   // ✅ این خط اضافه شد
+
+                            // ساخت ViewModel بدون Hilt
+                            val vm = viewModel<ProfileStepperViewModel>(
+                                factory = object : ViewModelProvider.Factory {
+                                    @Suppress("UNCHECKED_CAST")
+                                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                                        return ProfileStepperViewModel(
+                                            app = app,
+                                            repo = repo,
+                                            tokenProvider = { authPrefs.token.first() },
+                                            catRepo = catRepo     // ✅ اینجا پاس بده
+                                        ) as T
+                                    }
+                                }
+                            )
+
+                            val scope = rememberCoroutineScope()
 
                             ProfileStepperScreen(
                                 onBack = { nav.popBackStack() },
-                                onGetPremiumClick = {
-                                    nav.navigate(Route.UpgradePlan.value)
-                                },
+                                onGetPremiumClick = { nav.navigate(Route.UpgradePlan.value) },
                                 onDone = { _, _, _, _, _, _ ->
-                                    // اگر setToken یک تابع suspend است:
                                     scope.launch {
-                                        authPrefs.setToken("REPLACE_WITH_REAL_TOKEN")
+                                        // هر کاری بعد از اتمام پروفایل
                                         nav.navigate(Route.Home.value) {
                                             popUpTo(0) { inclusive = true }
                                         }
                                     }
-
-
-                                    // اگر setToken suspend نیست، می‌تونی بدون launch هم بنویسی:
-                                    // authPrefs.setToken("REPLACE_WITH_REAL_TOKEN")
-                                    // nav.navigate(Route.Home.value) {
-                                    //     popUpTo(0) { inclusive = true }
-                                    // }
-                                }
+                                },
+                                vm = vm  // 👈 ویومدل تزریق شد
                             )
                         }
                         /* ================= SwapDetailsScreenV2 ================= */
+                        /* ================= SwapDetailsScreenV2 ================= */
                         composable(Route.SwapDetailsV2.value) {
-                            // اگر از Inventory برگشتیم، شناسه‌ی انتخاب‌شده را بخوانیم
-                            val selectedId by nav.currentBackStackEntry
-                                ?.savedStateHandle
-                                ?.getStateFlow("selected_item_id", "")
-                                ?.collectAsState() ?: remember { mutableStateOf("") }
+                            val ui = swapVm.ui
 
+                            // Painters از لینک‌های سرور (fallback به آیکن محلی)
+                            val meAvatar = remember(ui.me?.link) {
+                                val url = swapVm.imgUrl(ui.me?.link)
+                                if (url.isNullOrBlank()) painterResource(R.drawable.ic_avatar)
+                                else coil.compose.rememberAsyncImagePainter(url)
+                            }
+                            val otherAvatar = remember(ui.other?.userAvatarPath) {
+                                val url = swapVm.imgUrl(ui.other?.userAvatarPath)
+                                if (url.isNullOrBlank()) painterResource(R.drawable.ic_avatar)
+                                else coil.compose.rememberAsyncImagePainter(url)
+                            }
+                            val otherItemPainter = remember(ui.other?.itemImagePath) {
+                                val url = swapVm.imgUrl(ui.other?.itemImagePath)
+                                if (url.isNullOrBlank()) painterResource(R.drawable.items1)
+                                else coil.compose.rememberAsyncImagePainter(url)
+                            }
+                            val myItemPainter = remember(ui.mySelectedItemId to ui.myInventory) {
+                                val imgPath = ui.myInventory.firstOrNull { it._id == ui.mySelectedItemId }?.images?.firstOrNull()
+                                val url = swapVm.imgUrl(imgPath)
+                                url?.let { coil.compose.rememberAsyncImagePainter(it) }
+                            }
 
-                            val selectedItem = remember(selectedId) { inventoryList.find { it.id == selectedId } }
+                            // وضعیت دکمه‌ها طبق VM
+                            val screenState = when {
+                                ui.requestInFlight     -> SwapScreenState.Pending
+                                ui.error != null       -> SwapScreenState.Error
+                                ui.mySelectedItemId == null -> SwapScreenState.Empty
+                                else                   -> SwapScreenState.Ready
+                            }
 
-                            // کاربران نمونه
-                            val userA = SwapUser(
-                                avatar = painterResource(R.drawable.ic_avatar),
-                                name = "Kamyar",
-                                location = "Dubai,UAE"
-                            )
-                            val userB = SwapUser(
-                                avatar = painterResource(R.drawable.ic_avatar),
-                                name = "Jolie",
-                                location = "Dubai,UAE"
-                            )
-
-                            // صفحه V2 با تمام حالت‌ها – فعلاً حالت Ready/Empty بر اساس داشتن آیتم
                             SwapDetailsScreenV2(
-                                title = "Lina Ehab",
-                                state = if (selectedItem == null)
-                                    SwapScreenState.Empty
-                                else
-                                    SwapScreenState.Ready,
+                                title = ui.other?.userName ?: "Swap",
+                                state = screenState,
                                 leftIcon = painterResource(R.drawable.ic_swap_back),
                                 callIcon = painterResource(R.drawable.ic_call),
                                 moreIcon = painterResource(R.drawable.ic_swap_more),
-                                userA = userA,
-                                itemA = selectedItem?.let { SwapItem(it.image) },
-                                userB = userB,
-                                itemB = SwapItem(painterResource(R.drawable.items1)),
+
+                                userA = SwapUser(
+                                    avatar = meAvatar,
+                                    name = ui.me?.fullname ?: ui.me?.username ?: "Me",
+                                    location = listOfNotNull(ui.me?.location?.city, ui.me?.location?.country).joinToString()
+                                ),
+                                itemA = ui.mySelectedItemId?.let { id -> myItemPainter?.let { SwapItem(it) } },
+
+                                userB = SwapUser(
+                                    avatar = otherAvatar,
+                                    name = ui.other?.userName ?: "-",
+                                    location = "" // اگر از دیتیل داری، اینجا پاس بده
+                                ),
+                                itemB = SwapItem(otherItemPainter),
+
                                 onBack = { nav.popBackStack() },
                                 onCall = { /* TODO */ },
                                 onMore = { /* TODO */ },
-                                onSelectItem = { nav.navigate(Route.InventorySelect.value) },   // ← برو انتخاب آیتم
-                                onRequestSwap = { /* TODO: ارسال ریکوئست و تغییر state به Pending */ },
+                                onSelectItem = {
+                                    // مطمئن شو پروفایل/اینونتوری لود شده
+                                    if (swapVm.ui.me == null) swapVm.loadMe()
+                                    swapVm.loadMyInventory()
+                                    nav.navigate(Route.InventorySelect.value)
+                                },
+                                onRequestSwap = { swapVm.sendOffer() },
                                 onAccept = { /* TODO */ },
                                 onReject = { /* TODO */ },
                                 onWriteReview = { /* TODO */ }
                             )
                         }
 
+
+                        /* ================= InventorySelectScreen ================= */
                         /* ================= InventorySelectScreen ================= */
                         composable(Route.InventorySelect.value) {
-                            // لیست انبار (دمو)
-                            val inventory = listOf(
-                                InventoryItem("1", painterResource(R.drawable.items1)),
-                                InventoryItem("2", painterResource(R.drawable.items1)),
-                                InventoryItem("3", painterResource(R.drawable.items1)),
-                                InventoryItem("4", painterResource(R.drawable.items1)),
-                            )
+                            val ui = swapVm.ui
+
+                            // اگر هنوز نیامده، لود کن
+                            LaunchedEffect(Unit) {
+                                if (ui.me == null) swapVm.loadMe()
+                                swapVm.loadMyInventory()
+                            }
+
+                            // مپ DTO -> UI Tile
+                            val items = ui.myInventory.map { dto ->
+                                val firstImg = swapVm.imgUrl(dto.images?.firstOrNull())
+                                val painter = if (firstImg.isNullOrBlank())
+                                    painterResource(R.drawable.items1)
+                                else coil.compose.rememberAsyncImagePainter(firstImg)
+                                InventoryItem(id = dto._id, image = painter)
+                            }
 
                             InventorySelectScreen(
-                                items = inventory,
-                                selectedId = null, // اگر از قبل انتخاب داری اینجا پاس بده
+                                items = items,
+                                selectedId = ui.mySelectedItemId,
                                 onBack = { nav.popBackStack() },
                                 onAddItem = { /* TODO: مسیر افزودن آیتم جدید */ },
-                                onSelect = { /* اگر لازم داری هر انتخاب را Live ثبت کنی */ },
-                                onDone = { selectedId ->
-                                    // نتیجه را به صفحه‌ی قبلی برگردان
-                                    nav.previousBackStackEntry
-                                        ?.savedStateHandle
-                                        ?.set("selected_item_id", selectedId)
-                                    nav.popBackStack() // ← بازگشت به SwapDetailsScreenV2
+                                onSelect = { id -> swapVm.selectMyItem(id) },
+                                onDone = { id ->
+                                    swapVm.selectMyItem(id)
+                                    nav.popBackStack() // ← برگشت به SwapDetailsV2
                                 },
                                 backIcon = painterResource(R.drawable.ic_swap_back),
-                                addIcon  = painterResource(R.drawable.ic_add_circle) // آیکن اختیاری
+                                addIcon  = painterResource(R.drawable.ic_add_circle)
                             )
                         }
+
 
                         /* ================= NotificationScreen ================= */
                         composable(Route.Notification.value) {
@@ -482,7 +642,8 @@ class MainActivity : ComponentActivity() {
                             ProductCreateWizard(
                                 onExit = { nav.popBackStack() },
                                 onBackToPrevScreen = { nav.popBackStack() },
-                                navTo = { route -> nav.navigate(route) }
+                                navTo = { route -> nav.navigate(route) },
+                                tokenProvider = { token }                 // 👈 اینجا پاس بده
                             )
                         }
                         composable(Route.ProductCreateEdit.value) {
@@ -491,26 +652,35 @@ class MainActivity : ComponentActivity() {
                                 onExit = { nav.popBackStack() },
                                 onBackToPrevScreen = { nav.popBackStack() },
                                 navTo = { route -> nav.navigate(route) },
-                                initial = initial
+                                initial = initial,
+                                tokenProvider = { token }                 // 👈 اینجا پاس بده
+
                             )
                         }
                         composable(Route.ItemPreview.value) {
                             val payload = ProductPreviewStore.lastPayload
+                            val token by authPrefs.token.collectAsState(initial = "")
+
                             if (payload != null) {
                                 ItemPublishPreviewScreen(
                                     payload = payload,
                                     onBack = { nav.popBackStack() },
-                                    onPublish = {
-                                        nav.navigate(Route.ItemDetailBoost.value)
+                                    onPublishSuccess = { createdId ->
+                                        nav.navigate(Route.ItemDetailBoost.value) {
+                                            popUpTo(Route.Home.value) { inclusive = false }  // ✅ مسیرهای قبلی حذف می‌شن
+                                            launchSingleTop = true
+                                        }
                                     },
-                                    onEdit = {
-                                        nav.navigate(Route.ProductCreateEdit.value)
-                                    }
+                                    onEdit = { nav.navigate(Route.ProductCreateEdit.value) },
+                                    tokenProvider = { token },
+                                    countryProvider = { /* اگر داری از LocationsField: country */ "" },
+                                    cityProvider = { /* از LocationsField: city */ payload.location }
                                 )
                             } else {
                                 LaunchedEffect(Unit) { nav.popBackStack() }
                             }
                         }
+
                         composable(Route.Wallet.value) {
                             val now = LocalDate.now()
                             val txs = listOf(
@@ -794,62 +964,24 @@ class MainActivity : ComponentActivity() {
                                 )
 
                         }
-                        composable(Route.Profile.value) {
-                            val tabs = buildMainTabs()
-                            BottomNavLayout(nav = nav, tabs = tabs) {
-                                ProfileScreen(
-                                    gradient = Brush.linearGradient(
-                                        listOf(
-                                            Color(0x33FFC753),
-                                            Color(0x334AC0A8)
-                                        )
-                                    ),
-                                    trashIcon = painterResource(R.drawable.ic_trash),
-                                    editIcon = painterResource(R.drawable.ic_edit_bottom),
-                                    deleteIcon = painterResource(R.drawable.ic_trash),
-                                    settingsIcon = painterResource(R.drawable.ic_setting),
-                                    rightActionIcon = painterResource(R.drawable.ic_wallet),
-                                    avatar = painterResource(R.drawable.ic_avatar),
-                                    name = "Jolie",
-                                    verifiedIcon = painterResource(R.drawable.ic_verify),
-                                    verifiedIcon1 = painterResource(R.drawable.ic_verify),
-                                    starIcon = painterResource(R.drawable.ic_star_items),
-                                    ratingText = "N/A",
-                                    handleAndLocation = "@Jolie888 · Dubai-U.A.E",
-                                    stats = ProfileStats(3, 4, 56),
-                                    leftSegmentIcon = painterResource(R.drawable.ic_box_add),
-                                    rightSegmentIcon = painterResource(R.drawable.ic_star),
-                                    rightActiveIcon = painterResource(R.drawable.ic_star_active),
-                                    initialSegment = 0,
-                                    allItems = listOf(
-                                        ItemCardUi(
-                                            image = painterResource(R.drawable.items2),
-                                            title = "Canon 4000D",
-                                            expiresLabel = "Expires Sep 2026",
-                                            categoryChip = null
-                                        )
-                                    ),
-                                    collections = listOf(
-                                        CollectionCardUi(
-                                            cover = painterResource(R.drawable.items1),
-                                            title = "Lookbook"
-                                        ),
-                                        CollectionCardUi(
-                                            cover = painterResource(R.drawable.items2),
-                                            title = "Cars"
-                                        )
-                                    ),
+                        composable(
+                            route = Route.Profile.value + "?userId={userId}",
+                            arguments = listOf(
+                                navArgument("userId") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                    defaultValue = null
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val userId: String? = backStackEntry.arguments?.getString("userId")
 
-                                    showPremiumTipInitially = false,
-                                    favoriteItems = emptyList(),
-                                    isOwner = true,
-                                    onSettings = { nav.navigate(Route.SettingsScreen.value) },
-                                    onRightAction = { nav.navigate(Route.Wallet.value) },
-                                    onEditItem = {Route.EditItem.value},
-                                    onAddCollection = {Route.AddCollection.value},
-                                    onCollectionClick = {Route.Collection.value},
-                                    onRowFollow = {Route.FollowersFollowing.value},
-
+                            BottomNavLayout(nav = nav, tabs = buildMainTabs()) {
+                                // --- Container مسئول لودینگ/ارور/رفرش + مپ به UI ---
+                                ProfileRoute(
+                                    nav = nav,
+                                    userId = userId,
+                                    tokenProvider = { authPrefs.token.first() }
                                 )
                             }
                         }
@@ -860,40 +992,71 @@ class MainActivity : ComponentActivity() {
                         ) { backStackEntry ->
                             val itemId = backStackEntry.arguments?.getString("itemId") ?: return@composable
 
-                            // صفحه‌ی دیتیل (از کد خودت استفاده می‌کنیم)
                             ItemDetailScreen(
-                                images = listOf(
-                                    painterResource(R.drawable.items1),
-                                    painterResource(R.drawable.items1)
-                                ),
-                                likeCount = 357,
-                                isFavorite = true,
-                                backIcon = painterResource(R.drawable.ic_items_back),
-                                shareIcon = painterResource(R.drawable.ic_upload_items),
-                                moreIcon = painterResource(R.drawable.ic_menu_revert),
-                                starIcon = painterResource(R.drawable.ic_menu_agenda),
-
-                                title = "Item $itemId",
-                                sellerAvatar = painterResource(R.drawable.ic_avatar),
-                                sellerName = "Jolie",
-                                sellerVerifiedIcon = painterResource(R.drawable.ic_verify),
-                                sellerstaricon = painterResource(R.drawable.ic_star_items),
-                                sellerRatingText = "N/A",
-                                sellerLocation = "Dubai, U.A.E",
-                                sellerDistanceText = "(2423) km from you",
-
-                                description = "Canon4000D camera rarely used and with all its accessories",
-                                conditionTitle = "Good",
-                                conditionSub = "Gently used and may have minor cosmetic flaws, fully functional.",
-                                valueText = "AED 8500",
-                                categories = listOf("Photography", "Cameras"),
-                                uploadedAt = "17/09/2025",
+                                itemId = itemId,
+                                onBack = { nav.popBackStack() },
+                                onShare = {},
                                 onOpenSwapDetails = { nav.navigate(Route.SwapDetails.value) },
-                                reviews = demoReviews,
-                                summary = demoSummary,
-                                emptyIllustration = painterResource(R.drawable.ic_menu_report_image),
-                                onSwap = { nav.navigate(Route.SwapDetailsV2.value) },
+
+                                onSwap = {
+                                    // ⚠️ این‌ها را از state صفحه آیتم‌دیتیل خودت پر کن:
+                                    val ownerId: String   = /* TODO: state.item!!.ownerId */ ""
+                                    val ownerName: String = /* TODO: state.item!!.sellerName */ "Seller"
+                                    val ownerAvatarPath: String? = /* TODO: state.item!!.sellerAvatarUrl */ null
+                                    val requestedItemImagePath: String? =
+                                        /* TODO: state.item!!.imageUrls.firstOrNull()?.toServerPathIfNeeded() */ null
+
+                                    swapVm.setOther(
+                                        com.dibachain.smfn.activity.swap.SwapOther(
+                                            userId = ownerId,
+                                            userName = ownerName,
+                                            userAvatarPath = ownerAvatarPath,
+                                            itemId = itemId,
+                                            itemImagePath = requestedItemImagePath
+                                        )
+                                    )
+                                    swapVm.loadMe()
+                                    nav.navigate(Route.SwapDetailsV2.value)
+                                },
+
+                                onMore = {}
                             )
+
+
+                        // صفحه‌ی دیتیل (از کد خودت استفاده می‌کنیم)
+//                            ItemDetailScreen(
+//                                images = listOf(
+//                                    painterResource(R.drawable.items1),
+//                                    painterResource(R.drawable.items1)
+//                                ),
+//                                likeCount = 357,
+//                                isFavorite = true,
+//                                backIcon = painterResource(R.drawable.ic_items_back),
+//                                shareIcon = painterResource(R.drawable.ic_upload_items),
+//                                moreIcon = painterResource(R.drawable.ic_menu_revert),
+//                                starIcon = painterResource(R.drawable.ic_menu_agenda),
+//
+//                                title = "Item $itemId",
+//                                sellerAvatar = painterResource(R.drawable.ic_avatar),
+//                                sellerName = "Jolie",
+//                                sellerVerifiedIcon = painterResource(R.drawable.ic_verify),
+//                                sellerstaricon = painterResource(R.drawable.ic_star_items),
+//                                sellerRatingText = "N/A",
+//                                sellerLocation = "Dubai, U.A.E",
+//                                sellerDistanceText = "(2423) km from you",
+//
+//                                description = "Canon4000D camera rarely used and with all its accessories",
+//                                conditionTitle = "Good",
+//                                conditionSub = "Gently used and may have minor cosmetic flaws, fully functional.",
+//                                valueText = "AED 8500",
+//                                categories = listOf("Photography", "Cameras"),
+//                                uploadedAt = "17/09/2025",
+//                                onOpenSwapDetails = { nav.navigate(Route.SwapDetails.value) },
+//                                reviews = demoReviews,
+//                                summary = demoSummary,
+//                                emptyIllustration = painterResource(R.drawable.ic_menu_report_image),
+//                                onSwap = { nav.navigate(Route.SwapDetailsV2.value) },
+//                            )
                         }
                     }
                 }

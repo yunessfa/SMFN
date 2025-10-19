@@ -9,17 +9,21 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        buildConfigField ("String", "BASE_URL", "\"https://smfnapi.dibachain.com/\"")
+        buildConfigField ("String", "BASE_URL_IMAGE", "\"https://smfns3.dibachain.com/\"")
         applicationId = "com.dibachain.smfn"
         minSdk = 26
         targetSdk = 36
-        versionCode = 100
-        versionName = "1.53.2.0"
+        versionCode = 150
+        versionName = "1.70.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            buildConfigField("String", "BASE_URL", "\"https://smfnapi.dibachain.com/\"")
+            buildConfigField ("String", "BASE_URL_IMAGE", "\"https://smfns3.dibachain.com/\"")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -36,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -45,6 +50,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-video:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.0.0-alpha.11")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

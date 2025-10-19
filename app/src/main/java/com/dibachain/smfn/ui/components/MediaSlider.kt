@@ -1,77 +1,61 @@
+// ui/components/MediaSlider.kt
 package com.dibachain.smfn.ui.components
 
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.material3.Icon
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
+
 sealed class Media {
     data class Url(val url: String) : Media()
     data class Res(@DrawableRes val id: Int) : Media()
 }
 
-//
-//@Composable
-//private fun OverlayIcon(
-//    painter: Painter?,
-//    onClick: () -> Unit,
-//    modifier: Modifier = Modifier,
-//    containerSize: Dp = 48.dp,
-//    iconSize: Dp = 65.dp,
-//    background: Color? = null
-//) {
-//    Box(
-//        modifier = modifier
-//            .size(containerSize)
-//            .clip(CircleShape)
-//            .then(if (background != null) Modifier.background(background) else Modifier)
-//            .clickable(enabled = painter != null) { onClick() },
-//        contentAlignment = Alignment.Center
-//    ) {
-//        if (painter != null) {
-//            Image(painter = painter, contentDescription = null, modifier = Modifier.size(iconSize))
-//        }
-//    }
-//}
 @Composable
 fun MediaSlider(
     items: List<Media>,
     modifier: Modifier = Modifier,
-    leftIcon1: Painter? = null,
-    leftIcon2: Painter? = null,
-    rightIcon: Painter? = null,
-    onLeftIcon1Click: () -> Unit = {},
-    onLeftIcon2Click: () -> Unit = {},
-    onRightIconClick: () -> Unit = {},
+
+    // آیکن‌ها
+    favIconInactive: Painter? = null,   // آیکن قبل از افزودن به علاقه‌مندی
+    favIconActive: Painter? = null,     // آیکن بعد از افزودن
+    leftIcon2: Painter? = null,         // مثلا "جزئیات"
+    rightIcon: Painter? = null,         // رد کردن کارت به چپ
+
+    // علاقه‌مندی
+    isFavorite: (index: Int) -> Boolean = { false },
+    onToggleFavorite: (index: Int, media: Media, willBeFavorite: Boolean) -> Unit = { _,_,_ -> },
+
+    // کال‌بک‌های دیگر
+    onItemClick:      (index: Int, media: Media) -> Unit = { _, _ -> },
+    onRightIconNext:  (index: Int, media: Media) -> Unit = { _, _ -> },
+
     cornerRadius: Dp = 30.dp,
-    onItemClick: (index: Int, media: Media) -> Unit = { _, _ -> },
 ) {
     require(items.isNotEmpty()) { "MediaSlider needs at least one item" }
 
@@ -79,11 +63,9 @@ fun MediaSlider(
     val shape = RoundedCornerShape(cornerRadius)
     val scope = rememberCoroutineScope()
 
-    // ایندکس فعلی به‌صورت حلقه‌ای (بی‌نهایت)
     var current by remember { mutableIntStateOf(0) }
     fun real(i: Int) = ((i % items.size) + items.size) % items.size
 
-    // انیمیشن‌های نرم
     val offsetX = remember { Animatable(0f) }
     val rotation = remember { Animatable(0f) }
     val scaleUnder = 0.95f
@@ -93,14 +75,52 @@ fun MediaSlider(
         BoxWithConstraints(
             modifier = modifier
                 .fillMaxWidth()
-                .aspectRatio(360f / 640f) // همون نسبت قبلی
+                .aspectRatio(360f / 640f)
                 .clip(shape)
+                .background(Color(0xFFF6F6F6))   // ⬅️ بک‌گراند روشن برای ظرف اسلایدر
         ) {
             val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
             val threshold = widthPx * 0.25f
-            val outX = widthPx + 480f
+            val outX = widthPx * 1.2f
 
-            // کارت زیرین (بعدی) – کمی کوچک و پایین‌تر
+            fun goNext() { // dismiss به چپ → آیتم بعدی
+                val topIndex = real(current)
+                val m = items[topIndex]
+                scope.launch {
+                    onRightIconNext(topIndex, m)              // کال‌بک فعلی‌ات
+                    offsetX.animateTo(-outX, tween(240, easing = FastOutSlowInEasing))
+                    rotation.animateTo(-18f, tween(200))
+                    current = real(current + 1)
+                    offsetX.snapTo(0f); rotation.snapTo(0f)
+                }
+            }
+
+            fun goPrev() { // dismiss به راست → آیتم قبلی
+                val topIndex = real(current)
+                val m = items[topIndex]
+                scope.launch {
+                    // (اختیاری) اگر کال‌بک جدا می‌خواهی، یکی اضافه کن. فعلاً فقط انیمیشن می‌زنیم.
+                    offsetX.animateTo(outX, tween(240, easing = FastOutSlowInEasing))
+                    rotation.animateTo(18f, tween(200))
+                    current = real(current - 1)
+                    offsetX.snapTo(0f); rotation.snapTo(0f)
+                }
+            }
+
+            fun dismissLeftThenNext() {
+                val topIndex = real(current)
+                val m = items[topIndex]
+                scope.launch {
+                    onRightIconNext(topIndex, m)
+                    offsetX.animateTo(-outX, tween(240, easing = FastOutSlowInEasing))
+                    rotation.animateTo(-18f, tween(200))
+                    current = real(current + 1)
+                    offsetX.snapTo(0f)
+                    rotation.snapTo(0f)
+                }
+            }
+
+            // کارت زیرین
             val nextIndex = real(current + 1)
             Box(
                 modifier = Modifier
@@ -129,7 +149,7 @@ fun MediaSlider(
                 }
             }
 
-            // کارت رویی (درگ/کلیک)
+            // کارت رویی
             val topIndex = real(current)
             Box(
                 modifier = Modifier
@@ -145,28 +165,15 @@ fun MediaSlider(
                                 change.consume()
                                 val nx = offsetX.value + drag.x
                                 scope.launch {
-                                    // درگ روان با کمی مقاومت
                                     offsetX.snapTo(nx)
                                     rotation.snapTo((nx / widthPx) * 10f)
                                 }
                             },
                             onDragEnd = {
-                                val shouldDismiss = kotlin.math.abs(offsetX.value) > threshold
+                                val shouldDismiss = kotlin.math.abs(offsetX.value) > widthPx * 0.25f
                                 if (shouldDismiss) {
-                                    val dir = kotlin.math.sign(offsetX.value)
-                                    scope.launch {
-                                        // خروج نرم و تمیز
-                                        offsetX.animateTo(
-                                            dir * outX,
-                                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
-                                        )
-                                        rotation.animateTo(dir * 18f, tween(200, 200))
-                                        current = real(current + 1)
-                                        offsetX.snapTo(0f)
-                                        rotation.snapTo(0f)
-                                    }
+                                    if (offsetX.value < 0f) goNext() else goPrev()
                                 } else {
-                                    // بازگشت نرم
                                     scope.launch {
                                         offsetX.animateTo(
                                             0f,
@@ -181,15 +188,7 @@ fun MediaSlider(
                             }
                         )
                     }
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        // فقط وقتی برنگشته و درگ فعال نبود
-                        if (!offsetX.isRunning && kotlin.math.abs(offsetX.value) < 8f) {
-                            onItemClick(topIndex, items[topIndex])
-                        }
-                    }
+
             ) {
                 // تصویر
                 when (val m = items[topIndex]) {
@@ -207,9 +206,12 @@ fun MediaSlider(
                     )
                 }
 
-                // آیکن‌های پایین – روی خود کارت (همون جای قبلی)
                 val bottomPad = 22.dp
                 val sidePad = 28.dp
+
+                // انیمیشن ریز برای آیکن علاقه‌مندی
+                val favScale = remember { Animatable(1f) }
+
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -217,47 +219,67 @@ fun MediaSlider(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (leftIcon1 != null) {
+                    // ❤️ علاقه‌مندی با دو آیکن
+                    val isFav = isFavorite(topIndex)
+                    val favPainter = if (isFav) favIconActive else favIconInactive
+                    if (favPainter != null) {
                         Icon(
-                            painter = leftIcon1,
-                            contentDescription = null,
+                            painter = favPainter,
+                            contentDescription = if (isFav) "Favorited" else "Add to favorites",
                             tint = Color.Unspecified,
                             modifier = Modifier
-                                .size(48.dp) // همون ابعاد قبلی container (اگه قبلاً 48 بود)
+                                .size(48.dp)
+                                .graphicsLayer {
+                                    scaleX = favScale.value
+                                    scaleY = favScale.value
+                                }
                                 .clip(CircleShape)
-                                .clickable { onLeftIcon1Click() }
+                                .clickable {
+                                    // پالس کوچیک
+                                    scope.launch {
+                                        favScale.animateTo(0.85f, tween(90))
+                                        favScale.animateTo(1f, tween(120, easing = FastOutSlowInEasing))
+                                    }
+                                    onToggleFavorite(topIndex, items[topIndex],!isFav)
+                                }
                         )
                     }
+
+                    // آیکن دوم (مثلاً باز کردن جزئیات)
                     if (leftIcon2 != null) {
                         Icon(
                             painter = leftIcon2,
-                            contentDescription = null,
+                            contentDescription = "Open item",
                             tint = Color.Unspecified,
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .clickable { onLeftIcon2Click() }
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) {
+                                    onItemClick(topIndex, items[topIndex])
+                                }
                         )
                     }
                 }
+
+                // رد کردن کارت به چپ
                 if (rightIcon != null) {
                     Icon(
                         painter = rightIcon,
-                        contentDescription = null,
+                        contentDescription = "Next (dismiss left)",
                         tint = Color.Unspecified,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(start = sidePad, bottom = bottomPad)
                             .size(48.dp)
                             .clip(CircleShape)
-                            .clickable { onRightIconClick() }
+                            .clickable { goNext() }   // فقط به چپ
                     )
                 }
+
             }
         }
     }
 }
-
-
-
-

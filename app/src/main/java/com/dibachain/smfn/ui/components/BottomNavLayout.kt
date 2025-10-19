@@ -41,7 +41,7 @@ fun BottomNavLayout(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF6F4F7)) // پس‌زمینه 默
+            .background(Color(0xFFF8F5F8)) // پس‌زمینه 默
     ) {
         // محتوای صفحه
         Column(

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.dibachain.smfn.R
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
+import com.dibachain.smfn.data.CategoryUi
 import com.dibachain.smfn.navigation.Route
 import kotlinx.coroutines.delay
 
@@ -84,7 +85,7 @@ fun ItemDetailScreen(
     conditionTitle: String,
     conditionSub: String,
     valueText: String,
-    categories: List<String>,
+    categories: List<CategoryUi>,
     uploadedAt: String,
 
     // داده‌های Review
@@ -95,6 +96,7 @@ fun ItemDetailScreen(
     onSwap: () -> Unit = {},
     onOpenSwapDetails: () -> Unit = {}   // 👈 جدید
 ) {
+
     var selectedTab by remember {mutableIntStateOf(initialTab) } // 0: Description, 1: Review
     val listState = rememberLazyListState()
 // --- state های bottom sheet / dialog ---
@@ -912,12 +914,12 @@ fun BodyText(text: String) {
 /* ---------------- چیپ‌های Category ---------------- */
 
 @Composable
-fun FlowChips(items: List<String>) {
-    FlowRow(
+fun FlowChips(items: List<CategoryUi>) {
+    androidx.compose.foundation.layout.FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items.forEach { label ->
+        items.forEach { category ->
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -925,14 +927,15 @@ fun FlowChips(items: List<String>) {
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val painter = coil.compose.rememberAsyncImagePainter(category.iconUrl)
                     Image(
-                        painter = painterResource(R.drawable.ic_camera_items),
-                        contentDescription = null,
+                        painter = painter,
+                        contentDescription = category.name,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = label,
+                        text = category.name,
                         style = TextStyle(
                             fontSize = 16.sp,
                             lineHeight = 23.3.sp,
@@ -947,6 +950,7 @@ fun FlowChips(items: List<String>) {
         }
     }
 }
+
 
 /* نسخهٔ ساده FlowRow (اگر foundation.layout.FlowRow نداری) */
 @Composable

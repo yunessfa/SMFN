@@ -1517,42 +1517,42 @@ private val DemoGradient
 //        chatIcon = painterResource(R.drawable.ic_chat)
 //    )
 //}
-@Preview(showBackground = true, backgroundColor = 0xFFF8F8F8)
-@Composable
-private fun Preview_MyProfile() {
-    ProfileScreen(
-        gradient = Brush.linearGradient(listOf(Color(0x33FFC753), Color(0x334AC0A8))),
-        settingsIcon = painterResource(R.drawable.ic_setting),
-        rightActionIcon = painterResource(R.drawable.ic_wallet),
-        avatar = painterResource(R.drawable.ic_avatar),
-        name = "Jolie",
-        verifiedIcon = painterResource(R.drawable.ic_verify),
-        verifiedIcon1 = painterResource(R.drawable.ic_verify),
-        starIcon = painterResource(R.drawable.ic_star_items),
-        ratingText = "N/A",
-        handleAndLocation = "@Jolie888 · Dubai-U.A.E",
-        stats = ProfileStats(3, 4, 56),
-        leftSegmentIcon = painterResource(R.drawable.ic_box_add),
-        rightSegmentIcon = painterResource(R.drawable.ic_star),
-        rightActiveIcon = painterResource(R.drawable.ic_star_active),
-        initialSegment = 0,
-        allItems = listOf(
-            ItemCardUi(
-                image = painterResource(R.drawable.items2),
-                title = "Canon 4000D",
-                expiresLabel = "Expires Sep 2026",
-                categoryChip = null
-            )
-        ),
-        collections = listOf(
-            CollectionCardUi(cover = painterResource(R.drawable.items1), title = "Lookbook"),
-            CollectionCardUi(cover = painterResource(R.drawable.items2), title = "Cars")
-        ),
-        showPremiumTipInitially=false,
-        favoriteItems = emptyList(),
-        isOwner = true // 👈 یعنی دکمه‌ها نمی‌آید و کارت به سبک عکس رندر می‌شود
-    )
-}
+//@Preview(showBackground = true, backgroundColor = 0xFFF8F8F8)
+//@Composable
+//private fun Preview_MyProfile() {
+//    ProfileScreen(
+//        gradient = Brush.linearGradient(listOf(Color(0x33FFC753), Color(0x334AC0A8))),
+//        settingsIcon = painterResource(R.drawable.ic_setting),
+//        rightActionIcon = painterResource(R.drawable.ic_wallet),
+//        avatar = painterResource(R.drawable.ic_avatar),
+//        name = "Jolie",
+//        verifiedIcon = painterResource(R.drawable.ic_verify),
+//        verifiedIcon1 = painterResource(R.drawable.ic_verify),
+//        starIcon = painterResource(R.drawable.ic_star_items),
+//        ratingText = "N/A",
+//        handleAndLocation = "@Jolie888 · Dubai-U.A.E",
+//        stats = ProfileStats(3, 4, 56),
+//        leftSegmentIcon = painterResource(R.drawable.ic_box_add),
+//        rightSegmentIcon = painterResource(R.drawable.ic_star),
+//        rightActiveIcon = painterResource(R.drawable.ic_star_active),
+//        initialSegment = 0,
+//        allItems = listOf(
+//            ItemCardUi(
+//                image = painterResource(R.drawable.items2),
+//                title = "Canon 4000D",
+//                expiresLabel = "Expires Sep 2026",
+//                categoryChip = null
+//            )
+//        ),
+//        collections = listOf(
+//            CollectionCardUi(cover = painterResource(R.drawable.items1), title = "Lookbook"),
+//            CollectionCardUi(cover = painterResource(R.drawable.items2), title = "Cars")
+//        ),
+//        showPremiumTipInitially=false,
+//        favoriteItems = emptyList(),
+//        isOwner = true // 👈 یعنی دکمه‌ها نمی‌آید و کارت به سبک عکس رندر می‌شود
+//    )
+//}
 
 //@Preview(showBackground = true, backgroundColor = 0xFFF8F8F8)
 //@Composable

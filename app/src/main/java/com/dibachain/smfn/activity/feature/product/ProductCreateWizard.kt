@@ -2,6 +2,7 @@
 
 package com.dibachain.smfn.activity.feature.product
 
+import androidx.activity.compose.BackHandler
 import android.Manifest
 import android.content.ContentValues
 import android.content.Context
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,18 +62,62 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.dibachain.smfn.R
+import com.dibachain.smfn.activity.feature.profile.ProfileUiState
+import com.dibachain.smfn.activity.feature.profile.StepCategoriesApi
+import com.dibachain.smfn.flags.AuthPrefs
 import com.dibachain.smfn.preview.ProductPreviewStore
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /* ---------------- theme bits ---------------- */
 private val StepActive = Color(0xFFD7A02F)
 private val StepInactive = Color(0xFFE9E9E9)
 private val LabelColor = Color(0xFF46557B)
 private val PlaceholderColor = Color(0xFFB5BBCA)
-private val BorderColor = Color(0xFFECEEF2)
+val BorderColor = Color(0xFFECEEF2)
 private val Gradient = listOf(Color(0xFFFFC753), Color(0xFF4AC0A8))
 private val Inactive = Color(0xFF292D32)
 private val Gold = Color(0xFFE4A70A)
+// enumهای سرور
+private enum class ApiCondition(val key: String) {
+    BRAND_NEW("brand_new"),
+    LIKE_NEW("like_new"),
+    GOOD("good"),
+    FAIR("fair");
+}
+
+// مپ نمایش انسانی → کلید سرور
+private val CONDITION_MAP = mapOf(
+    "Brand new" to ApiCondition.BRAND_NEW.key,
+    "Like new"  to ApiCondition.LIKE_NEW.key,
+    "Good"      to ApiCondition.GOOD.key,
+    "Fair"      to ApiCondition.FAIR.key
+)
+private fun toUiCondition(api: String?): String? =
+    CONDITION_MAP.entries.firstOrNull { it.value == api }?.key
+
+private fun uriToPart(
+    ctx: Context,
+    uri: Uri,
+    formKey: String,
+    fileNameFallback: String
+): MultipartBody.Part? {
+    val cr = ctx.contentResolver
+    val type = cr.getType(uri) ?: "application/octet-stream"
+    val fileName = runCatching {
+        cr.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    }.getOrNull() ?: fileNameFallback
+
+    val input = cr.openInputStream(uri) ?: return null
+    val bytes = input.readBytes()
+    val reqBody = bytes.toRequestBody(type.toMediaTypeOrNull())
+    return MultipartBody.Part.createFormData(formKey, fileName, reqBody)
+}
 
 /* -------------- Public entry -------------- */
 @RequiresApi(Build.VERSION_CODES.O)
@@ -80,41 +126,107 @@ private val Gold = Color(0xFFE4A70A)
 fun ProductCreateWizard(
     onExit: () -> Unit,
     onBackToPrevScreen: () -> Unit,
-    navTo: (String) -> Unit,                 // ⬅️ اضافه
+    navTo: (String) -> Unit,
+    tokenProvider: () -> String,
     onSubmit: (ProductPayload) -> Unit = {},
-    initial: ProductPayload? = null               // ⬅️ اضافه
+    initial: ProductPayload? = null
 ) {
+    val vm: ProductCreateViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    val ui by vm.state.collectAsState()
+
+    // Loading & error
+    if (ui.loading) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    }
+    ui.error?.let { err ->
+        AlertDialog(
+            onDismissRequest = { vm.clearError() },
+            confirmButton = { TextButton(onClick = { vm.clearError() }) { Text("OK") } },
+            title = { Text("Create failed") },
+            text = { Text(err) }
+        )
+    }
+
     var didInit by remember { mutableStateOf(false) }
-    var step by remember { mutableIntStateOf(0) } // 0..5
-    // Step1
+    var step by rememberSaveable { mutableIntStateOf(0) } // 0..5
+
+    // Step 1
     val selectedCats = remember { mutableStateSetOf<String>() }
 
-    // Step2
+    // Step 2
     var itemName by remember { mutableStateOf("") }
     var itemDesc by remember { mutableStateOf("") }
     var condition by remember { mutableStateOf<String?>(null) }
     var showCondSheet by remember { mutableStateOf(false) }
 
-    // Step3
+    // Step 3
     val photos = remember { mutableStateListOf<String>() }
     var cover by remember { mutableStateOf<String?>(null) }
     var showPickSource by remember { mutableStateOf(false) }
     var pickForCover by remember { mutableStateOf(false) }
-    var photoError by remember { mutableStateOf<String?>(null) } // سایز زیاد
-    val MAX_IMG_BYTES = 8L * 1024 * 1024 // 8MB مثال
+    var photoError by remember { mutableStateOf<String?>(null) }
+    val MAX_IMG_BYTES = 8L * 1024 * 1024
 
-    // Step4
+    // Step 4
     var verifyVideo by remember { mutableStateOf<String?>(null) }
 
-    // Step5
+    // Step 5
     val tags = remember { mutableStateListOf<String>() }
     var tagInput by remember { mutableStateOf("") }
-    var valueText by remember { mutableStateOf("") } // فقط عدد
+    var valueText by remember { mutableStateOf("") }
     val currency = "AED"
 
-    // Step6
+    // Step 6
     var location by remember { mutableStateOf("") }
+    var country by remember { mutableStateOf("") }
+    var countryCode by remember { mutableStateOf("") }
+    var locationErr by remember { mutableStateOf<String?>(null) }
+
     val ctx = LocalContext.current
+    val imageParts = photos.mapIndexedNotNull { idx, s ->
+        uriToPart(ctx, Uri.parse(s), "images[]", "photo_$idx.jpg")
+    }
+    fun String.toRB() = this.toRequestBody("text/plain".toMediaType())
+
+    fun buildFormMap(
+        title: String,
+        desc: String,
+        condition: String,
+        valueType: String,
+        valueNumber: Long,
+        country: String,
+        city: String,
+        categories: Collection<String>,
+        tags: Collection<String>
+    ): Pair<MutableMap<String, @JvmSuppressWildcards RequestBody>, List<Pair<String, String>>> {
+        val map = mutableMapOf<String, RequestBody>()
+        map["title"] = title.toRB()
+        map["description"] = desc.toRB()
+        map["condition"] = condition.toRB()
+        map["value[type]"] = valueType.toRB()
+        map["value"] = valueNumber.toString().toRB()
+        map["location[country]"] = country.toRB()
+        map["location[city]"] = city.toRB()
+
+        // برای دیباگ: این لیست «کلید/مقدارهای تکرارشونده» را هم برمی‌گردانیم
+        val repeatables = mutableListOf<Pair<String, String>>()
+        categories.forEach { repeatables += "category[]" to it }
+        tags.forEach { repeatables += "tags[]" to it }
+
+        return map to repeatables
+    }
+
+
+    val thumbnailPart = cover?.let {
+        uriToPart(ctx, Uri.parse(it), "thumbnail", "thumbnail.jpg")
+    }
+
+    val videoPart = verifyVideo?.let {
+        uriToPart(ctx, Uri.parse(it), "verifyVideo", "verify.mp4")
+    }
+
     LaunchedEffect(initial, didInit) {
         if (!didInit && initial != null) {
             selectedCats.clear(); selectedCats.addAll(initial.categories)
@@ -126,173 +238,266 @@ fun ProductCreateWizard(
             verifyVideo = initial.video
             tags.clear(); tags.addAll(initial.tags)
             valueText = initial.valueAed.toString()
-            location = initial.location
+            location = initial.city
+            country = initial.location
             didInit = true
         }
     }
-    /* ---------- Top area ---------- */
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Color.White)
-            .systemBarsPadding()
-            .padding(horizontal = 14.dp)
-    ) {
-        StepperHeader(
-            step = step,
-            total = 6,
-            onBack = { if (step == 0) onBackToPrevScreen() else step-- },
-            onClose = onExit
-        )
 
-        Spacer(Modifier.height(10.dp))
-
-        val (title, sub) = when (step) {
-            0 -> "Select Category" to "You can select multiple categories."
-            1 -> "Name & description" to ""
-            2 -> "Add Photos" to "Minimum 1 photo"
-            3 -> "Verify item" to "Record a short video using your back camera"
-            4 -> "Add Tags" to "Adding hashtags makes your items easier to find"
-            else -> "Add Location" to "Your preferred Swap location"
+    // Category VM بیرون از Scaffold تا هم content و هم bottomBar بهش دسترسی داشته باشن
+    val catVm = androidx.lifecycle.viewmodel.compose.viewModel<CategoryPickerViewModel>(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return CategoryPickerViewModel(
+                    repo = com.dibachain.smfn.data.Repos.categoryRepository,
+                    tokenProvider = tokenProvider
+                ) as T
+            }
         }
-        Text(
-            text = "Step ${step + 1}",
-            style = TextStyle(
-                fontSize = 14.sp,
-                lineHeight = 21.sp,
-                fontFamily = FontFamily(Font(R.font.inter_light)),
-                fontWeight = FontWeight.W300, // یا FontWeight.Light
-                color = Color(0xFF000000),
-            ),
-            modifier = Modifier.padding(top = 22.dp , bottom = 8.dp, )
-        )
+    )
+    val catUi by catVm.ui.collectAsState()
+    BackHandler(enabled = true) {
+        when {
+            showPickSource -> showPickSource = false         // اول شیت انتخاب سورس عکس
+            showCondSheet  -> showCondSheet  = false         // بعد شیت Condition
+            photoError != null -> photoError = null          // صفحه‌ی خطای عکس
+            step > 0 -> step--                               // یک استپ برگرد
+            else -> onBackToPrevScreen()                     // استپ 0: خروج از صفحه
+        }
+    }
+    // ---------- Scaffold با دکمه‌ی ثابت پایین ----------
+    Scaffold(
+        bottomBar = {
+            // نوار پایین ثابت
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color.White)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                GradientButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(28.dp)),
+                    text = when (step) {
+                        in 0..4 -> "Continue"
+                        else -> "Preview Item & Publish"
+                    },
+                    enabled = when (step) {
+                        0 -> catUi.interests.isNotEmpty()
+                        1 -> itemName.isNotBlank() && condition != null
+                        2 -> photos.isNotEmpty() && cover != null && photoError == null
+                        3 -> verifyVideo != null
+                        4 -> valueText.isNotBlank()
+                        else -> location.isNotBlank() && country.isNotBlank()
+                    }
+                ) {
+                    if (step < 5) step++
+                    else {
+                        val payload = ProductPayload(
+                            categories = catUi.interests,
+                            name = itemName,
+                            description = itemDesc,
+                            condition = condition.orEmpty(),
+                            photos = photos.toList(),
+                            cover = cover!!,
+                            video = verifyVideo!!,
+                            tags = tags.toList(),
+                            valueAed = valueText.toLongOrNull() ?: 0L,
+                            location = country,
+                            city = location,
 
-        Text(title,
-            style = TextStyle(
-                fontSize = 28.sp,
-                lineHeight = 23.3.sp,
-                fontFamily = FontFamily(Font(R.font.inter_semibold)),
-                fontWeight = FontWeight(600),
-                color = Color(0xFF292D32),
-             ),
-        )
-        if (sub.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            Text(sub,
+                        )
+                        ProductPreviewStore.lastPayload = payload
+                        navTo(com.dibachain.smfn.navigation.Route.ItemPreview.value)
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        // محتوای اسکرول‌دار بالا
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(Color.White)
+                .systemBarsPadding()
+                .padding(innerPadding)
+                .padding(horizontal = 14.dp)
+        ) {
+            StepperHeader(
+                step = step,
+                total = 6,
+                onBack = { if (step == 0) onBackToPrevScreen() else step-- },
+                onClose = onExit
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            val (title, sub) = when (step) {
+                0 -> "Select Category" to "You can select multiple categories."
+                1 -> "Name & description" to ""
+                2 -> "Add Photos" to "Minimum 1 photo"
+                3 -> "Verify item" to "Record a short video using your back camera"
+                4 -> "Add Tags" to "Adding hashtags makes your items easier to find"
+                else -> "Add Location" to "Your preferred Swap location"
+            }
+
+            Text(
+                text = "Step ${step + 1}",
                 style = TextStyle(
                     fontSize = 14.sp,
                     lineHeight = 21.sp,
                     fontFamily = FontFamily(Font(R.font.inter_light)),
-                    fontWeight = FontWeight(300),
+                    fontWeight = FontWeight.W300,
                     color = Color(0xFF000000),
-                 ),
-            )
-        }
-        Spacer(Modifier.height(24.dp))
-
-        /* ---------- Step content ---------- */
-        when (step) {
-            0 -> StepCategoriesExact(
-                selected = selectedCats,
-                onGetPremiumClick = {},
-                onSelectionChanged = {}
+                ),
+                modifier = Modifier.padding(top = 22.dp, bottom = 8.dp)
             )
 
-            1 -> StepNameAndDesc(
-                name = itemName, onName = { itemName = it },
-                desc = itemDesc, onDesc = { itemDesc = it },
-                condition = condition, onOpenCondition = { showCondSheet = true }
+            Text(
+                title,
+                style = TextStyle(
+                    fontSize = 28.sp,
+                    lineHeight = 23.3.sp,
+                    fontFamily = FontFamily(Font(R.font.inter_semibold)),
+                    fontWeight = FontWeight(600),
+                    color = Color(0xFF292D32),
+                ),
             )
 
-            2 -> {
-                if (photoError != null) {
-                    StepPhotoError(
-                        message = photoError!!,
-                        onTryAgain = { photoError = null }
+            if (sub.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    sub,
+                    style = TextStyle(
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                        fontFamily = FontFamily(Font(R.font.inter_light)),
+                        fontWeight = FontWeight(300),
+                        color = Color(0xFF000000),
+                    ),
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ⬇️ فضای محتوایی که اسکرول می‌شود و دکمه را هل نمی‌دهد
+//            val scroll = rememberScrollState()
+            Column(
+                Modifier
+                    .weight(1f)
+//                    .verticalScroll(scroll)
+            ) {
+                when (step) {
+                    0 -> StepCategoriesApi(
+                        ui = ProfileUiState(
+                            catLoading = catUi.catLoading,
+                            parents = catUi.parents,
+                            childrenByParent = catUi.childrenByParent,
+                            loadingChildrenFor = catUi.loadingChildrenFor,
+                            expandedKey = catUi.expandedKey,
+                            interests = catUi.interests.toList()
+                        ),
+                        onExpand = { catVm.toggleExpand(it) },
+                        onToggleSub = { catVm.toggleSubId(it) },
+                        onGetPremiumClick = {
+                            navTo(com.dibachain.smfn.navigation.Route.UpgradePlan.value)
+                        },
+                        modifier = Modifier
                     )
-                } else {
-                    StepPhotos(
-                        photos = photos,
-                        maxPhotos = 10,
-                        onAddPhotoClick = { pickForCover = false; showPickSource = true },
-                        onRemovePhoto = { photos.remove(it) },
-                        cover = cover,
-                        onAddCoverClick = { pickForCover = true; showPickSource = true },
-                        onRemoveCover = { cover = null }
+
+                    1 -> StepNameAndDesc(
+                        name = itemName, onName = { itemName = it },
+                        desc = itemDesc, onDesc = { itemDesc = it },
+                        condition = toUiCondition(condition),                 // ← متن انسانی برای UI
+                        onOpenCondition = { showCondSheet = true }
                     )
+
+                    2 -> {
+                        if (photoError != null) {
+                            StepPhotoError(
+                                message = photoError!!,
+                                onTryAgain = { photoError = null }
+                            )
+                        } else {
+
+                            val scroll = rememberScrollState()
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(scroll)
+                            ) {
+                                StepPhotos(
+                                    photos = photos,
+                                    maxPhotos = 10,
+                                    onAddPhotoClick = {
+                                        pickForCover = false
+                                        showPickSource = true
+                                    },
+                                    onRemovePhoto = { photos.remove(it) },
+                                    cover = cover,
+                                    onAddCoverClick = {
+                                        pickForCover = true
+                                        showPickSource = true
+                                    },
+                                    onRemoveCover = { cover = null }
+                                )
+                                Spacer(Modifier.height(40.dp)) // کمی فاصله پایین
+                            }
+                        }
+                    }
+
+                    3 -> StepKycVideoBackCamera(
+                        videoUri = verifyVideo,
+                        onRecord = { verifyVideo = it },
+                        onClear = { verifyVideo = null }
+                    )
+
+                    4 -> StepTagsAndValue(
+                        tags = tags,
+                        tagInput = tagInput,
+                        onTagInput = { tagInput = it },
+                        onAddTag = {
+                            val t = tagInput.trim().removePrefix("#")
+                            if (t.isNotEmpty() && t.length <= 24 && !tags.contains(t)) tags.add(t)
+                            tagInput = ""
+                        },
+                        onRemoveTag = { tags.remove(it) },
+                        currency = currency,
+                        valueText = valueText,
+                        onValue = { if (it.all { ch -> ch.isDigit() }) valueText = it }
+                    )
+
+                    5 -> Column {
+                        LocationsField(
+                            tokenProvider = { tokenProvider() },
+                            initial = if (location.isNotBlank()) "$location, $country" else null,
+                            onSelected = { city, ctry, ctryCode ->
+                                location = city
+                                country = ctry
+                                countryCode = ctryCode
+                                locationErr = null
+                            },
+                            isError = locationErr != null
+                        )
+                        AnimatedVisibility(visible = locationErr != null) {
+                            Text(
+                                locationErr.orEmpty(),
+                                color = Color(0xFFDC3A3A),
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                    }
                 }
             }
-
-            3 -> StepKycVideoBackCamera(
-                videoUri = verifyVideo,
-                onRecord = { verifyVideo = it },
-                onClear = { verifyVideo = null }
-            )
-
-            4 -> StepTagsAndValue(
-                tags = tags,
-                tagInput = tagInput,
-                onTagInput = { tagInput = it },
-                onAddTag = {
-                    val t = tagInput.trim().removePrefix("#")
-                    if (t.isNotEmpty() && t.length <= 24 && !tags.contains(t)) tags.add(t)
-                    tagInput = ""
-                },
-                onRemoveTag = { tags.remove(it) },
-                currency = currency,
-                valueText = valueText,
-                onValue = { if (it.all { ch -> ch.isDigit() }) valueText = it }
-            )
-
-            5 -> StepLocation(
-                location = location,
-                onLocation = { location = it }
-            )
         }
-
-        Spacer(Modifier.height(24.dp))
-
-        /* ---------- Bottom CTA ---------- */
-        GradientButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(28.dp)),
-            text = when (step) {
-                in 0..4 -> "Continue"
-                else -> "Preview Item & Publish"
-            },
-            enabled = when (step) {
-                0 -> selectedCats.isNotEmpty()
-                1 -> itemName.isNotBlank() && condition != null
-                2 -> photos.isNotEmpty() && cover != null && photoError == null
-                3 -> verifyVideo != null
-                4 -> valueText.isNotBlank()
-                else -> location.isNotBlank()
-            }
-        ) {
-            if (step < 5) step++ else{
-                val payload = ProductPayload(
-                    categories = selectedCats.toSet(),
-                    name = itemName,
-                    description = itemDesc,
-                    condition = condition.orEmpty(),
-                    photos = photos.toList(),
-                    cover = cover!!,
-                    video = verifyVideo!!,
-                    tags = tags.toList(),
-                    valueAed = valueText.toLong(),
-                    location = location
-                )
-                onSubmit(payload) // اختیاری
-
-                // ⬇️ پاس بده به استور و برو صفحه‌ی Preview
-                ProductPreviewStore.lastPayload = payload
-                navTo(com.dibachain.smfn.navigation.Route.ItemPreview.value) // ⬅️ برو صفحه‌ی Preview
-            }
-        }
-        Spacer(Modifier.height(12.dp))
     }
+
+    // ---------- هندلرهای انتخاب عکس ----------
     fun handlePickedFromGallery(uris: List<Uri>) {
         val list = uris.map { it.toString() }
         val tooLarge = list.firstOrNull { uriStr ->
@@ -310,28 +515,23 @@ Please upload an image smaller than ${MAX_IMG_BYTES / (1024 * 1024)} MB."""
             }
         }
     }
-    /* ---------- Sheets ---------- */
+
     if (showCondSheet) {
         ConditionSheet(
-            selected = condition,
-            onSelect = { condition = it },
+            selected = toUiCondition(condition),               // ← متن انسانی برای سِلکت شدن رادیو
+            onSelect = { uiText -> condition = CONDITION_MAP[uiText] ?: uiText },
             onDismiss = { showCondSheet = false }
         )
     }
+
     val galleryMultipleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        handlePickedFromGallery(uris)
-    }
+    ) { uris -> handlePickedFromGallery(uris) }
 
-// لانچر تکی گالری
     val gallerySingleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) handlePickedFromGallery(listOf(uri))
-    }
+    ) { uri -> if (uri != null) handlePickedFromGallery(listOf(uri)) }
 
-// لانچر دوربین (TakePicture)
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
@@ -349,7 +549,6 @@ Please upload an image smaller than ${MAX_IMG_BYTES / (1024 * 1024)} MB."""
         }
     }
 
-    // کمک‌کننده برای ساخت URI موقت عکس
     fun createTempImageUri(context: Context): Uri? {
         val name = "pic_${System.currentTimeMillis()}.jpg"
         val cv = ContentValues().apply {
@@ -363,15 +562,13 @@ Please upload an image smaller than ${MAX_IMG_BYTES / (1024 * 1024)} MB."""
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv
         )
     }
+
     if (showPickSource) {
         PickImageSourceSheet(
             onGallery = {
                 showPickSource = false
-                if (pickForCover) {
-                    gallerySingleLauncher.launch("image/*")
-                } else {
-                    galleryMultipleLauncher.launch("image/*")
-                }
+                if (pickForCover) gallerySingleLauncher.launch("image/*")
+                else galleryMultipleLauncher.launch("image/*")
             },
             onCamera = {
                 showPickSource = false
@@ -381,21 +578,8 @@ Please upload an image smaller than ${MAX_IMG_BYTES / (1024 * 1024)} MB."""
             onDismiss = { showPickSource = false }
         )
     }
-
-
-
-
-
-
-// --- لانچرها و هندلرها ---
-
-    // نتیجه‌گیر مشترک برای گالری (تکی/چندتایی)
-
-
-// لانچر چندتایی گالری
-
-
 }
+
 
 /* ---------------- Data ---------------- */
 data class ProductPayload(
@@ -408,7 +592,9 @@ data class ProductPayload(
     val video: String,
     val tags: List<String>,
     val valueAed: Long,
-    val location: String
+    val location: String,
+    val city: String,
+
 )
 
 /* ---------------- Header ---------------- */
@@ -445,6 +631,10 @@ private fun StepNameAndDesc(
     desc: String, onDesc: (String) -> Unit,
     condition: String?, onOpenCondition: () -> Unit
 ) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+    ) {
     OutlinedTextField(
         value = name, onValueChange = onName,
         singleLine = true,
@@ -520,6 +710,7 @@ private fun StepNameAndDesc(
         )
     }
 }
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -542,8 +733,8 @@ private fun ConditionSheet(
     }
 }
 
-/* ---------------- Step 3 ---------------- */
 @OptIn(ExperimentalLayoutApi::class)
+
 @Composable
 private fun StepPhotos(
     photos: List<String>, maxPhotos: Int,
@@ -556,40 +747,44 @@ private fun StepPhotos(
     val coverRatio = 180f / 140f
     val spacing = 12.dp
     Spacer(Modifier.height(12.dp))
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val cellWidth = (maxWidth - spacing) / 2
-        val cellHeight = cellWidth / coverRatio
-    FlowRow(
-        maxItemsInEachRow = 3,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        photos.forEach { uri ->
-            PhotoCell(uri = uri, onRemove = { onRemovePhoto(uri) }, width = cellWidth, height = cellHeight)
-        }
-        if (photos.size < maxPhotos) {
-            AddPhotoCell(onClick = onAddPhotoClick, width = cellWidth, height = cellHeight)
-        }
+    Column(Modifier.fillMaxWidth()) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val cellWidth = (maxWidth - spacing) / 2
+            val cellHeight = cellWidth / coverRatio
+            FlowRow(
+                maxItemsInEachRow = 3,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                photos.forEach { uri ->
+                    PhotoCell(uri = uri, onRemove = { onRemovePhoto(uri) }, width = cellWidth, height = cellHeight)
+                }
+                if (photos.size < maxPhotos) {
+                    AddPhotoCell(onClick = onAddPhotoClick, width = cellWidth, height = cellHeight)
+                }
 
-    Spacer(Modifier.height(21.dp))
-        Text(
-            text = "Add Cover item Photo",
-            style = TextStyle(
-                fontSize = 28.sp,
-                lineHeight = 23.3.sp,
-                fontFamily = FontFamily(Font(R.font.inter_semibold)),
-                fontWeight = FontWeight(600),
-                color = Color(0xFF292D32),
-            )
-        )
-        Spacer(Modifier.height(27.dp))
-    if (cover == null)
-        AddPhotoCell(onClick = onAddCoverClick, width = cellWidth, height = cellHeight)
-    else
-        PhotoCell(uri = cover, onRemove = onRemoveCover, width = cellWidth, height = cellHeight)
+                Spacer(Modifier.height(21.dp))
+                Text(
+                    text = "Add Cover item Photo",
+                    style = TextStyle(
+                        fontSize = 28.sp,
+                        lineHeight = 23.3.sp,
+                        fontFamily = FontFamily(Font(R.font.inter_semibold)),
+                        fontWeight = FontWeight(600),
+                        color = Color(0xFF292D32),
+                    )
+                )
+                Spacer(Modifier.height(27.dp))
+                if (cover == null)
+                    AddPhotoCell(onClick = onAddCoverClick, width = cellWidth, height = cellHeight)
+                else
+                    PhotoCell(uri = cover, onRemove = onRemoveCover, width = cellWidth, height = cellHeight)
+            }
+        }
     }
 }
-}
+
+
 @Composable
 private fun ConditionSheetBody(
     selected: String?,
@@ -996,6 +1191,11 @@ private fun StepKycVideoBackCamera(
     fun stopRecording() { recording?.stop(); recording = null }
 
     val showPreview = videoUri.isNullOrEmpty()
+    // داخل StepKycVideoBackCamera(...)
+    BackHandler(enabled = true) {
+        if (isRecording) stopRecording() else onClear() // یا بگذار والد هندل کند
+    }
+
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
 
         // خود ویدئوی پیش‌نمایش / پخش
@@ -1022,7 +1222,7 @@ private fun StepKycVideoBackCamera(
                         onClick = onClear,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(8.dp)
+                            .padding(16.dp)
                             .size(28.dp)
                             .clip(CircleShape)
                             .background(Color.Black.copy(alpha = .45f))
@@ -1071,15 +1271,11 @@ private fun StepTagsAndValue(
     valueText: String,
     onValue: (String) -> Unit
 ) {
-    Text("Add Tags", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-    Text("(Optional)", fontSize = 12.sp, color = Color(0xFF8C8C8C))
     Spacer(Modifier.height(10.dp))
-
     // Input + Chips
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
     ) {
         OutlinedTextField(
             value = tagInput,
@@ -1111,10 +1307,7 @@ private fun StepTagsAndValue(
         )
     }
 
-    Spacer(Modifier.height(20.dp))
-    Text("Add value", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-    Spacer(Modifier.height(8.dp))
-    // AED prefix
+    Spacer(Modifier.height(20.dp))    // AED prefix
     Row(
         Modifier
             .fillMaxWidth()
@@ -1126,26 +1319,29 @@ private fun StepTagsAndValue(
     ) {
         Text(currency, color = PlaceholderColor, modifier = Modifier.padding(end = 8.dp))
         HorizontalDivider(
-            color = BorderColor, modifier = Modifier
+            color = BorderColor,
+            modifier = Modifier
                 .width(1.dp)
                 .height(24.dp)
         )
         Spacer(Modifier.width(8.dp))
+
         BasicTextField(
             value = valueText,
             onValueChange = onValue,
-            textStyle =  TextStyle(
+            textStyle = TextStyle(
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
                 fontFamily = FontFamily(Font(R.font.inter_light)),
                 fontWeight = FontWeight(300),
                 color = Color(0xFF000000),
-                ),
+            ),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.weight(1f)   // ✅ فقط فضای باقیمانده را بگیر
         )
     }
+
 }
 
 /* ---------------- Step 6 ---------------- */
@@ -1624,4 +1820,5 @@ fun Step5_TagsValue_Preview() {
 //        }
 //    }
 //}
+
 
