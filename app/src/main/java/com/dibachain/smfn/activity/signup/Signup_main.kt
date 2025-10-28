@@ -173,7 +173,7 @@ fun SignUpScreen(
                             try {
                                 onSignUp(email.trim(), pass)   // ← API register (suspend)
                             } catch (e: Exception) {
-                                passErr = "Could not register"
+                                passErr = ""
                                 snackbarHost.showSnackbar(e.message ?: "Registration failed")
                             } finally {
                                 loading = false

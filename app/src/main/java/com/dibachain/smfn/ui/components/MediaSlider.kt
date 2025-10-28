@@ -30,11 +30,13 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 sealed class Media {
     data class Url(val url: String) : Media()
     data class Res(@DrawableRes val id: Int) : Media()
 }
+private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
 @Composable
 fun MediaSlider(
@@ -42,13 +44,13 @@ fun MediaSlider(
     modifier: Modifier = Modifier,
 
     // آیکن‌ها
-    favIconInactive: Painter? = null,   // آیکن قبل از افزودن به علاقه‌مندی
-    favIconActive: Painter? = null,     // آیکن بعد از افزودن
-    leftIcon2: Painter? = null,         // مثلا "جزئیات"
-    rightIcon: Painter? = null,         // رد کردن کارت به چپ
+    favIconInactive: Painter? = null,
+    favIconActive: Painter? = null,
+    leftIcon2: Painter? = null,
+    rightIcon: Painter? = null,
 
     // علاقه‌مندی
-    isFavorite: (index: Int) -> Boolean = { false },
+    isFavoriteAt: (index: Int) -> Boolean = { false },
     onToggleFavorite: (index: Int, media: Media, willBeFavorite: Boolean) -> Unit = { _,_,_ -> },
 
     // کال‌بک‌های دیگر
@@ -66,8 +68,12 @@ fun MediaSlider(
     var current by remember { mutableIntStateOf(0) }
     fun real(i: Int) = ((i % items.size) + items.size) % items.size
 
-    val offsetX = remember { Animatable(0f) }
-    val rotation = remember { Animatable(0f) }
+    // --- انیمیشن‌های تمیز و سبک ---
+    // animX فقط برای حرکت‌های «انیمیشنی» استفاده می‌شود (dismiss / برگشت).
+    // درگ زنده با dragX (state معمولی) انجام می‌شود تا coroutine بارانی نزنیم.
+    val animX = remember { Animatable(0f) }
+    var dragX by remember { mutableFloatStateOf(0f) }
+
     val scaleUnder = 0.95f
     val liftUnder = 24f
 
@@ -77,63 +83,105 @@ fun MediaSlider(
                 .fillMaxWidth()
                 .aspectRatio(360f / 640f)
                 .clip(shape)
-                .background(Color(0xFFF6F6F6))   // ⬅️ بک‌گراند روشن برای ظرف اسلایدر
+                .background(Color(0xFFF6F6F6))
         ) {
             val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
-            val threshold = widthPx * 0.25f
-            val outX = widthPx * 1.2f
+            val threshold = widthPx * 0.22f // کمی حساس‌تر از قبل
+            val outX = widthPx * 1.1f       // خروج نرم‌تر
 
-            fun goNext() { // dismiss به چپ → آیتم بعدی
-                val topIndex = real(current)
-                val m = items[topIndex]
-                scope.launch {
-                    onRightIconNext(topIndex, m)              // کال‌بک فعلی‌ات
-                    offsetX.animateTo(-outX, tween(240, easing = FastOutSlowInEasing))
-                    rotation.animateTo(-18f, tween(200))
-                    current = real(current + 1)
-                    offsetX.snapTo(0f); rotation.snapTo(0f)
+            // مقدار نهایی ترنسلیشن/روتیشن بر اساس مجموع dragX + animX
+            val totalX by remember { derivedStateOf { dragX + animX.value } }
+            val rotationZ by remember {
+                derivedStateOf {
+                    // چرخش نرم متناسب با جابجایی (clamp ملایم)
+                    val r = (totalX / widthPx) * 12f
+                    when {
+                        r > 16f -> 16f
+                        r < -16f -> -16f
+                        else -> r
+                    }
                 }
             }
 
-            fun goPrev() { // dismiss به راست → آیتم قبلی
-                val topIndex = real(current)
-                val m = items[topIndex]
-                scope.launch {
-                    // (اختیاری) اگر کال‌بک جدا می‌خواهی، یکی اضافه کن. فعلاً فقط انیمیشن می‌زنیم.
-                    offsetX.animateTo(outX, tween(240, easing = FastOutSlowInEasing))
-                    rotation.animateTo(18f, tween(200))
-                    current = real(current - 1)
-                    offsetX.snapTo(0f); rotation.snapTo(0f)
-                }
+            suspend fun animateDismiss(toLeft: Boolean) {
+                // کل حرکت را در یک انیمیشن انجام می‌دهیم (بدون انیمیشن مجزا برای Rotation)
+                animX.stop()
+                val target = (if (toLeft) -outX else outX) - dragX
+                animX.animateTo(
+                    targetValue = target,
+                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                )
+                // تعویض آیتم
+                current = real(current + if (toLeft) 1 else -1)
+                // ریست سریع
+                animX.snapTo(0f)
+                dragX = 0f
             }
 
-            fun dismissLeftThenNext() {
+            suspend fun animateRestore() {
+                animX.stop()
+                // برگرداندن کارت به حالت اولیه (فقط مقدار dragX را با animX خنثی می‌کنیم)
+                animX.animateTo(
+                    targetValue = -dragX,
+                    animationSpec = spring(
+                        stiffness = Spring.StiffnessMediumLow,
+                        dampingRatio = Spring.DampingRatioMediumBouncy
+                    )
+                )
+                // بعد از برگشت، صفرش کن
+                animX.snapTo(0f)
+                dragX = 0f
+            }
+
+            fun goNext() { // dismiss به چپ
                 val topIndex = real(current)
                 val m = items[topIndex]
                 scope.launch {
                     onRightIconNext(topIndex, m)
-                    offsetX.animateTo(-outX, tween(240, easing = FastOutSlowInEasing))
-                    rotation.animateTo(-18f, tween(200))
-                    current = real(current + 1)
-                    offsetX.snapTo(0f)
-                    rotation.snapTo(0f)
+                    animateDismiss(toLeft = true)
                 }
             }
 
+            fun goPrev() { // dismiss به راست
+                scope.launch {
+                    animateDismiss(toLeft = false)
+                }
+            }
+// --- زیر کارت: هم‌سو با جهت درگ انتخاب می‌شود ---
+            val direction = if (totalX >= 0f) +1 else -1
+            val underIndex = if (direction > 0) real(current - 1) else real(current + 1)
+
+// پیشروی انیمیشن بین 0..1 (نرم و clamp شده)
+// از threshold استفاده می‌کنیم تا وقتی به آستانه نزدیک می‌شوی، تقریبا 1 شود
+            val rawProgress = kotlin.math.abs(totalX) / threshold
+            val progress = rawProgress.coerceIn(0f, 1f)
+
+// پارامترهای هدف کارت زیرین
+            val baseScaleUnder = 0.95f
+            val baseLiftUnder = 24f
+            val baseAlphaUnder = 0.92f
+// کمی پارالاکس افقی معکوس جهت سوایپ (خیلی کم تا طبیعی بماند)
+            val baseParallaxX = widthPx * 0.06f * direction
+
+            val underScale = lerp(baseScaleUnder, 1f, progress)
+            val underLift  = lerp(baseLiftUnder, 0f, progress)
+            val underAlpha = lerp(baseAlphaUnder, 1f, progress)
+            val underTx    = lerp(baseParallaxX, 0f, progress)
             // کارت زیرین
             val nextIndex = real(current + 1)
             Box(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
-                        scaleX = scaleUnder
-                        scaleY = scaleUnder
-                        translationY = liftUnder
-                        alpha = 0.92f
+                        scaleX = underScale
+                        scaleY = underScale
+                        translationY = underLift
+                        translationX = underTx
+                        alpha = underAlpha
                     }
                     .clip(shape)
             ) {
-                when (val m = items[nextIndex]) {
+                when (val m = items[underIndex]) {
                     is Media.Url -> SubcomposeAsyncImage(
                         model = ImageRequest.Builder(ctx).data(m.url).crossfade(true).build(),
                         contentDescription = null,
@@ -155,40 +203,36 @@ fun MediaSlider(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
-                        translationX = offsetX.value
-                        rotationZ = rotation.value
+                        translationX = totalX
+                        rotationZ
                     }
                     .clip(shape)
                     .pointerInput(topIndex) {
                         detectDragGestures(
+                            onDragStart = {
+                                // اگر انیمیشنی در حال اجراست متوقف کن تا درگ طبیعی باشد
+                                scope.launch { animX.stop() }
+                            },
                             onDrag = { change, drag ->
                                 change.consume()
-                                val nx = offsetX.value + drag.x
-                                scope.launch {
-                                    offsetX.snapTo(nx)
-                                    rotation.snapTo((nx / widthPx) * 10f)
-                                }
+                                // بدون coroutine؛ حرکتِ زنده کاملاً سبک
+                                dragX += drag.x
                             },
                             onDragEnd = {
-                                val shouldDismiss = kotlin.math.abs(offsetX.value) > widthPx * 0.25f
+                                val shouldDismiss = abs(totalX) > threshold
                                 if (shouldDismiss) {
-                                    if (offsetX.value < 0f) goNext() else goPrev()
+                                    // جهت dismiss از totalX
+                                    val toLeft = totalX < 0f
+                                    scope.launch { animateDismiss(toLeft) }
                                 } else {
-                                    scope.launch {
-                                        offsetX.animateTo(
-                                            0f,
-                                            animationSpec = spring(
-                                                stiffness = Spring.StiffnessMediumLow,
-                                                dampingRatio = Spring.DampingRatioMediumBouncy
-                                            )
-                                        )
-                                        rotation.animateTo(0f, spring())
-                                    }
+                                    scope.launch { animateRestore() }
                                 }
+                            },
+                            onDragCancel = {
+                                scope.launch { animateRestore() }
                             }
                         )
                     }
-
             ) {
                 // تصویر
                 when (val m = items[topIndex]) {
@@ -219,8 +263,8 @@ fun MediaSlider(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // ❤️ علاقه‌مندی با دو آیکن
-                    val isFav = isFavorite(topIndex)
+                    // ❤️ علاقه‌مندی با دو آیکن (بدون تغییر منطقی)
+                    val isFav = isFavoriteAt(topIndex)
                     val favPainter = if (isFav) favIconActive else favIconInactive
                     if (favPainter != null) {
                         Icon(
@@ -235,17 +279,15 @@ fun MediaSlider(
                                 }
                                 .clip(CircleShape)
                                 .clickable {
-                                    // پالس کوچیک
                                     scope.launch {
                                         favScale.animateTo(0.85f, tween(90))
                                         favScale.animateTo(1f, tween(120, easing = FastOutSlowInEasing))
                                     }
-                                    onToggleFavorite(topIndex, items[topIndex],!isFav)
+                                    onToggleFavorite(topIndex, items[topIndex], !isFav)
                                 }
                         )
                     }
 
-                    // آیکن دوم (مثلاً باز کردن جزئیات)
                     if (leftIcon2 != null) {
                         Icon(
                             painter = leftIcon2,
@@ -275,10 +317,9 @@ fun MediaSlider(
                             .padding(start = sidePad, bottom = bottomPad)
                             .size(48.dp)
                             .clip(CircleShape)
-                            .clickable { goNext() }   // فقط به چپ
+                            .clickable { goNext() }
                     )
                 }
-
             }
         }
     }

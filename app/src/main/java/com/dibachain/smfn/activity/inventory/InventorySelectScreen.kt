@@ -20,14 +20,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dibachain.smfn.R
 
 data class InventoryItem(
     val id: String,
-    val image: Painter
+    val image: Painter   // همچنان Painter می‌گیری
 )
 
 @Composable
@@ -126,7 +125,7 @@ Column(
             ) {
                 items(items, key = { it.id }) { it ->
                     InventoryTile(
-                        painter = it.image,
+                        image = it.image,
                         selected = current == it.id,
                         onClick = {
                             current = it.id
@@ -135,12 +134,48 @@ Column(
                         addIcon = addIcon
                     )
                 }
+
             }
         }
     }
 }
 
 /* --- اجزای داخلی --- */
+@Composable
+private fun InventoryTile(
+    image: Painter,          // ⬅️ اسم و نوع درست
+    selected: Boolean,
+    onClick: () -> Unit,
+    addIcon: Painter?
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .then(if (selected) Modifier.border(2.dp, Color(0xFF35B67D), RoundedCornerShape(16.dp)) else Modifier)
+    ) {
+        Image(
+            painter = image,               // ⬅️ مستقیم نمایش بده
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(8.dp)
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color(0x66000000)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (addIcon != null) Icon(painter = addIcon, contentDescription = null, tint = Color.White)
+            else Text("+", color = Color.White, fontSize = 24.sp)
+        }
+    }
+}
 
 @Composable
 private fun EmptyAddCard(onClick: () -> Unit, addIcon: Painter?) {
@@ -193,77 +228,3 @@ private fun EmptyAddCard(onClick: () -> Unit, addIcon: Painter?) {
     }
 }
 
-@Composable
-private fun InventoryTile(
-    painter: Painter,
-    selected: Boolean,
-    onClick: () -> Unit,
-    addIcon: Painter?
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
-            .then(
-                if (selected) Modifier.border(2.dp, Color(0xFF35B67D), RoundedCornerShape(16.dp))
-                else Modifier
-            )
-    ) {
-        Image(
-            painter = painter,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // دایره‌ی تیره گوشه پایین-راست مثل طرح
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(Color(0x66000000)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (addIcon != null) {
-                Icon(painter = addIcon, contentDescription = null, tint = Color.White)
-            } else {
-                Text("+", color = Color.White,fontSize = 24.sp)
-            }
-        }
-    }
-}
-
-/* --- PREVIEWS --- */
-
-//@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 844, name = "Empty")
-//@Composable
-//private fun PreviewInventoryEmpty() {
-//    InventorySelectScreen(
-//        items = emptyList(),
-//        onAddItem = {},
-//        backIcon = painterResource(R.drawable.ic_swap_back),
-//        addIcon = null
-//    )
-//}
-
-@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 844, name = "Filled")
-@Composable
-private fun PreviewInventoryFilled() {
-    val p = painterResource(R.drawable.items1)
-    InventorySelectScreen(
-        items = listOf(
-            InventoryItem("1", p),
-            InventoryItem("2", p),
-            InventoryItem("3", p),
-            InventoryItem("4", p),
-        ),
-        selectedId = "2",
-        onAddItem = {},
-        backIcon = painterResource(R.drawable.ic_swap_back),
-        addIcon = null
-    )
-}

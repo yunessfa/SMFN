@@ -1,6 +1,7 @@
 // data/remote/ItemsCreateApi.kt
 package com.dibachain.smfn.data.remote
 
+import com.dibachain.smfn.data.CreateItemResponse
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -38,5 +39,5 @@ interface ItemsCreateApi {
         @Part images: List<MultipartBody.Part>,             // چند فایل
         @Part thumbnail: MultipartBody.Part,                // تک فایل
         @Part verifyVideo: MultipartBody.Part               // تک فایل
-    ): CreateItemRes
+    ): CreateItemResponse
 }

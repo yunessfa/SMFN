@@ -35,7 +35,8 @@ import com.dibachain.smfn.R
 fun ReviewScreen(
     title: String,                          // "Jolie Review"
     onBack: () -> Unit = {},
-    onSubmit: (rating: Int, text: String) -> Unit = { _, _ -> }
+    onSubmit: (rating: Int, text: String) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier // 👈 اضافه کن
 ) {
     var text by remember { mutableStateOf("") }
     var rating by remember { mutableIntStateOf(0) }

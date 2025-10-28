@@ -1,5 +1,9 @@
 package com.dibachain.smfn.activity.messages
-
+import java.time.*
+import java.time.format.DateTimeFormatter
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import androidx.annotation.DrawableRes
@@ -8,9 +12,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -22,9 +30,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -40,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.dibachain.smfn.R
 import com.dibachain.smfn.activity.feature.profile.GradientText
@@ -48,6 +59,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import androidx.core.content.FileProvider
+import com.dibachain.smfn.core.Public
+import java.util.Random
 
 /* ---------------- Models ---------------- */
 
@@ -55,8 +68,22 @@ data class ChatMessage(
     val id: String,
     val text: String,
     val time: String,
+    val timeEpoch: Long,               // 👈 اضافه
     val isMine: Boolean,
-    val deliveredDoubleTick: Boolean = false
+    val deliveredDoubleTick: Boolean = false, // read=true
+    val isFile: Boolean = false,
+    val fileThumbUrl: String? = null,
+    val isVoice: Boolean = false,
+    val fileUrl: String? = null,
+    val itemPayload: ItemSwapPayload? = null
+)
+data class ItemMini(val _id: String, val title: String, val thumbnail: String?)
+data class UserMini(val _id: String, val username: String?, val link: String?)
+data class ItemSwapPayload(
+    val itemOffered: ItemMini,
+    val itemRequested: ItemMini,
+    val fromUser: UserMini,
+    val toUser: UserMini
 )
 
 enum class ChatAccessoryState {
@@ -71,27 +98,37 @@ data class ReviewCardData(
     val userLocation: String,
     val itemImage: Painter
 )
-
 /* ---------------- Screen ---------------- */
-
 @Composable
 fun ChatScreen(
     title: String,
     lastSeen: String,
     backIcon: Painter,
+    draftImages: List<Uri>,
+    draftAudio: Uri?,
+    onDraftImagesChange: (List<Uri>) -> Unit,
+    onDraftAudioChange: (Uri?) -> Unit,
     moreIcon: Painter,
     meEmojiIcon: Painter,
     micIcon: Painter,
     sendIcon: Painter,
     avatar: Painter,
     messages: List<ChatMessage>,
-    accessoryState: ChatAccessoryState = ChatAccessoryState.None,
-    reviewCard: ReviewCardData? = null,
+    accessoryState: ChatAccessoryState ,
+    reviewCard: ReviewCardData?,
     onBack: () -> Unit = {},
     onMore: () -> Unit = {},
+    onPickFromGallery: () -> Unit = {},
+    onPickFromCamera: () -> Unit = {},
+    onAskRecordPermission: () -> Unit = {},
+    onMessageBecameVisible: (String) -> Unit = {},
     onWriteReview: () -> Unit = {},
-    onSend: (String) -> Unit = {}
-) {
+    onSend: (String) -> Unit = {},
+    // 👇 جدیدها
+    onSendFiles: (List<Uri>) -> Unit = {},
+    onSendAudio: (Uri) -> Unit = {},
+    onInsertEmoji: (String) -> Unit = {}          // اگر خواستی از Route کنترل کنی
+){
     var input by rememberSaveable { mutableStateOf("") }
 
     var sheetStep by remember { mutableStateOf(SheetStep.None) }
@@ -104,13 +141,13 @@ fun ChatScreen(
     val fromAvatar = reviewCard?.userAvatar ?: avatar
     val toUser = title
     val toAvatar = avatar
-
     // ---------- Attachments (images + voice) ----------
     var showPickSource by remember { mutableStateOf(false) }
     var selectedUris by rememberSaveable(stateSaver = listSaver(
         save = { it.map(Uri::toString) },
         restore = { it.map(Uri::parse) }
     )) { mutableStateOf(emptyList<Uri>()) }
+    var viewerUrl by remember { mutableStateOf<String?>(null) }
 
     // Voice recording
     val ctx = LocalContext.current
@@ -121,54 +158,101 @@ fun ChatScreen(
     var recorder: MediaRecorder? by remember { mutableStateOf(null) }
     val scope = rememberCoroutineScope()
     var tickJob: Job? by remember { mutableStateOf(null) }
+    var recordFile by remember { mutableStateOf<File?>(null) }
+    var tmpVoiceFile by remember { mutableStateOf<File?>(null) }
 
     fun startRecording() {
         try {
-            val file = File.createTempFile("voice_", ".m4a", ctx.cacheDir)
-            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", file)
-            val rec = MediaRecorder().apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(96000)
-                setAudioSamplingRate(44100)
-                setOutputFile(file.absolutePath)
-                prepare()
-                start()
-            }
+            // پرمیشن قبلا از Route درخواست میشه
+            val f = File.createTempFile("voice_", ".m4a", ctx.cacheDir)
+            tmpVoiceFile = f
+
+            val rec = MediaRecorder()
+            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            rec.setAudioEncodingBitRate(96_000)
+            rec.setAudioSamplingRate(44100)
+            rec.setOutputFile(f.absolutePath)
+            rec.prepare()
+            rec.start()
+
             recorder = rec
-            recordFileUri = uri
             isRecording = true
             recordMillis = 0
             tickJob?.cancel()
-            tickJob = scope.launch {
-                while (isRecording) {
+            tickJob = scope.launch {           // ✅ از scope بیرونی استفاده کن
+                while (isRecording && recorder != null) {
                     delay(80)
+                    // maxAmplitude هر 80ms آپدیت میشه
+                    amplitude = rec.maxAmplitude.coerceAtLeast(1)
                     recordMillis += 80
-                    val amp = rec.maxAmplitude.coerceAtLeast(1)
-                    amplitude = amp
                 }
             }
         } catch (_: Exception) {
+            // اگر خطا خوردیم، ضبط را ببندیم
+            try { recorder?.reset(); recorder?.release() } catch (_: Exception) {}
+            recorder = null
             isRecording = false
         }
     }
-
-    fun stopRecording() {
+    fun stopRecording(onRecorded: (Uri) -> Unit) {
         try { recorder?.apply { stop(); reset(); release() } } catch (_: Exception) {}
         recorder = null
         isRecording = false
-        tickJob?.cancel()
-        tickJob = null
+        tickJob?.cancel(); tickJob = null
+
+        tmpVoiceFile?.let { file ->
+            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", file)
+            onRecorded(uri)
+        }
     }
 
-    Column(
+    val listState = rememberLazyListState()
+    var showEmojiSheet by remember { mutableStateOf(false) }
+
+
+    LaunchedEffect(messages.size, accessoryState, reviewCard != null) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(
+                messages.lastIndex + (if (accessoryState != ChatAccessoryState.None && reviewCard != null) 1 else 0)
+            )
+        }
+    }
+
+
+    LaunchedEffect(messages) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } }
+            .collect { keys ->
+                keys.forEach { k ->
+                    val id = k as? String ?: return@forEach
+                    val msg = messages.firstOrNull { it.id == id } ?: return@forEach
+                    if (!msg.isMine && !msg.deliveredDoubleTick) onMessageBecameVisible(id)
+                }
+            }
+    }
+//    LaunchedEffect(messages) {
+//        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.key } }
+//            .collect { keys ->
+//                keys.forEach { k ->
+//                    val id = k as? String ?: return@forEach
+//                    val msg = messages.firstOrNull { it.id == id } ?: return@forEach
+//                    if (!msg.isMine && !msg.deliveredDoubleTick) onMessageBecameVisible(id)
+//                }
+//            }
+//    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 16.dp)
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
     ) {
         TopBarChat(
             title = title,
@@ -183,17 +267,26 @@ fun ChatScreen(
         Spacer(Modifier.height(8.dp))
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
             reverseLayout = false
         ) {
             items(messages, key = { it.id }) { msg ->
-                MessageBubble(msg)
+                if (msg.itemPayload != null) {
+                    // هیچ بابیلی نشان نده؛ فقط به‌صورت امن read کن
+                    HiddenItemMessage(
+                        msg = msg,
+                        onVisible = onMessageBecameVisible
+                    )
+                } else {
+                    MessageBubble(msg, onImageClick = { viewerUrl = it })
+                }
             }
 
             if (accessoryState != ChatAccessoryState.None && reviewCard != null) {
-                item {
+                item(key = "review_card") {
                     Spacer(Modifier.height(4.dp))
                     ReviewCard(
                         data = reviewCard,
@@ -204,16 +297,37 @@ fun ChatScreen(
             }
         }
 
+
         // Recording inline bar (when holding mic)
         if (isRecording) {
             RecordingInlineBar(
                 millis = recordMillis,
                 amplitude = amplitude,
-                onCancel = { stopRecording() }
+                onCancel = {
+                    // حذف/کنسل: فایل را دور بریز
+                    try { recorder?.apply { stop(); reset(); release() } } catch (_: Exception) {}
+                    recorder = null
+                    isRecording = false
+                    tickJob?.cancel(); tickJob = null
+                    tmpVoiceFile?.delete()
+                    tmpVoiceFile = null
+                    // draftAudio را هم خالی نکن چون هنوز ساخته نشده
+                }
             )
             Spacer(Modifier.height(6.dp))
         }
 
+        var showEmoji by remember { mutableStateOf(false) }
+
+        if (draftImages.isNotEmpty() || draftAudio != null) {
+            AttachmentPreviewRow(
+                images = draftImages,
+                audioUri = draftAudio,
+                onRemoveImage = { uri -> onDraftImagesChange(draftImages - uri) },
+                onRemoveAudio = { onDraftAudioChange(null) }
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         // Attachment previews (images + voice)
         if (selectedUris.isNotEmpty() || recordFileUri != null) {
             AttachmentPreviewRow(
@@ -232,17 +346,28 @@ fun ChatScreen(
             micIcon = micIcon,
             sendIcon = sendIcon,
             onSend = {
-                if (input.isNotBlank()) {
-                    onSend(input)
+                val t = input.trim()
+                if (t.isNotEmpty()) {
+                    onSend(t)
                     input = ""
                 }
-                // اگر خواستی اینجا selectedUris / recordFileUri رو هم بفرستی، اضافه کن
+                if (draftImages.isNotEmpty()) {
+                    onSendFiles(draftImages)
+                    onDraftImagesChange(emptyList())
+                }
+                draftAudio?.let {
+                    onSendAudio(it)
+                    onDraftAudioChange(null)
+                }
             },
             onAttachClick = { showPickSource = true },
-            showSend = input.isNotBlank(),
+            showSend = input.isNotBlank() || draftImages.isNotEmpty() || (draftAudio != null),
             onMicLongPressStart = { startRecording() },
-            onMicLongPressEnd = { stopRecording() }
+            onMicLongPressEnd   = { stopRecording { uri -> onDraftAudioChange(uri) } },
+            isRecording = isRecording,
+            onEmojiClick = { showEmojiSheet = !showEmojiSheet }
         )
+
         Spacer(Modifier.height(8.dp))
 
         // ===== شیت 1: منو =====
@@ -289,27 +414,86 @@ fun ChatScreen(
             )
         }
 
-        // ===== شیت انتخاب منبع پیوست =====
+        if (showEmojiSheet) {
+            EmojiSheet(
+                onDismiss = { showEmojiSheet = false },
+                onPick = { e -> input += e; onInsertEmoji(e); showEmojiSheet = false }
+            )
+        }
         if (showPickSource) {
             PickImageSourceSheet(
                 onGallery = {
                     showPickSource = false
-                    // لانچر گالری خودت را صدا بزن و نتیجه را به selectedUris اضافه کن
-                    // نمونه:
-                    // galleryMultipleLauncher.launch("image/*")
+                    onPickFromGallery()
                 },
                 onCamera = {
                     showPickSource = false
-                    // tempPhotoUri = createTempImageUri(ctx)
-                    // cameraLauncher.launch(tempPhotoUri)
+                    onPickFromCamera()
                 },
                 onDismiss = { showPickSource = false }
             )
         }
+
+    }
+}
+    if (viewerUrl != null) {
+        FullscreenImageViewer(
+            url = viewerUrl!!,
+            onClose = { viewerUrl = null },
+        )
+    }
+}
+@Composable
+private fun HiddenItemMessage(
+    msg: ChatMessage,
+    onVisible: (String) -> Unit
+) {
+    // اگر پیام آیتمی مال من نیست و هنوز read نشده، همین‌جا علامت بخون
+    LaunchedEffect(msg.id) {
+        if (!msg.isMine && !msg.deliveredDoubleTick) onVisible(msg.id)
+    }
+    // هیچ UI یی نشون نده
+    Spacer(Modifier.height(0.dp))
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EmojiSheet(onDismiss: () -> Unit, onPick: (String) -> Unit) {
+    val emojis = listOf("😀","😁","😂","🤣","😊","😍","😎","😇","😅","😉","🤔","😭","🙏","👍","👎","🔥","✨","❤️")
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(16.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                emojis.forEach { e ->
+                    Text(
+                        e, fontSize = 28.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFF2F2F2))
+                            .clickable { onPick(e) }
+                            .padding(8.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 
-/* ---------------- Pieces ---------------- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @Composable
 private fun TopBarChat(
@@ -372,9 +556,109 @@ private fun TopBarChat(
         }
     }
 }
+@Composable
+fun FullscreenImageViewer(
+    url: String,
+    onClose: () -> Unit
+) {
+    // پس‌زمینه‌ی تاریک و خروج با ضربه روی بک‌گراند
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xE6000000))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onClose() } // کلیک بیرون → بستن
+    ) {
+        // زوم/درگ/دابل‌تپ
+        ZoomableAsyncImage(
+            url = url,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(0.dp)
+                .align(Alignment.Center)
+        )
+
+        // دکمه‌ی بستن
+        Icon(
+            painter = painterResource(R.drawable.ic_close), // هر ایکس سفیدی که داری
+            contentDescription = "Close",
+            tint = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .size(28.dp)
+                .clickable { onClose() }
+        )
+    }
+}
 
 @Composable
-private fun MessageBubble(msg: ChatMessage) {
+private fun ZoomableAsyncImage(
+    url: String,
+    modifier: Modifier = Modifier
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    // Pinch-to-zoom / pan
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val newScale = (scale * zoomChange).coerceIn(1f, 4f)
+        // وقتی به 1 برگردیم، آفست هم برگرده نزدیک صفر
+        val factor = if (scale == 1f && newScale == 1f) 0.8f else 1f
+        scale = newScale
+        offset += panChange * factor
+    }
+
+    // Double-tap: بین 1x و 2.5x سوییچ
+    val doubleTap = Modifier.pointerInput(Unit) {
+        detectTapGestures(
+            onDoubleTap = { tapOffset ->
+                if (scale > 1f) {
+                    scale = 1f; offset = Offset.Zero
+                } else {
+                    scale = 2.5f
+                    // کمی آفست تا مرکز تپ بزرگ‌تر شود
+                    offset = Offset.Zero
+                }
+            }
+        )
+    }
+
+    // عکس
+    Box(
+        modifier
+            .then(doubleTap)
+            .transformable(transformState)
+            .graphicsLayer {
+                translationX = offset.x
+                translationY = offset.y
+                scaleX = scale
+                scaleY = scale
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        coil.compose.AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+fun fullIcon(path: String?): String? {
+    if (path.isNullOrBlank()) return null
+    val base = Public.BASE_URL_IMAGE.trimEnd('/')
+    val rel = if (path.startsWith("/")) path else "/$path"
+    return base + rel
+}
+@Composable
+private fun MessageBubble(
+    msg: ChatMessage,
+    onImageClick: (String) -> Unit = {}
+) {
     val mineBg = Color(0xFFF6E5CD)
     val otherBg = Color(0xFFF2F3F7)
     val bubbleShape = RoundedCornerShape(16.dp)
@@ -390,32 +674,66 @@ private fun MessageBubble(msg: ChatMessage) {
                 .background(if (msg.isMine) mineBg else otherBg)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = msg.text,
-                style = TextStyle(
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily(Font(R.font.lato_regular)),
-                    fontWeight = FontWeight(400),
-                    color = Color(0xFF252525),
-                )
-            )
+            when {
+                // ویس: فقط اگر URL داشت
+                msg.isVoice && !msg.fileUrl.isNullOrBlank() -> {
+                    VoiceMessageBubble(audioUrl = msg.fileUrl!!)
+                }
+
+                // فایل تصویری: اگر آدرس داریم
+                msg.isFile && !msg.fileThumbUrl.isNullOrBlank() -> {
+                    val previewUrl = msg.fileUrl ?: msg.fileThumbUrl!!
+                    coil.compose.AsyncImage(
+                        model = previewUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .widthIn(max = 240.dp)
+                            .heightIn(min = 120.dp, max = 240.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onImageClick(previewUrl) },
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+
+                // فایل ولی URL نداریم → پلیس‌هولدر امن
+                msg.isFile -> {
+                    FilePlaceholder(filename = msg.text.ifBlank { "File" })
+                }
+
+                // متن معمولی
+                else -> {
+                    Text(
+                        text = msg.text,
+                        style = TextStyle(
+                            fontSize = 14.sp,
+                            fontFamily = FontFamily(Font(R.font.lato_regular)),
+                            color = Color(0xFF252525)
+                        )
+                    )
+                }
+            }
         }
+
         Spacer(Modifier.height(6.dp))
+
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val timeText = formatBubbleTime(
+                epoch = runCatching { msg.timeEpoch }.getOrNull(),
+                rawIso = msg.time
+            )
             Text(
-                text = msg.time,
+                timeText,
                 style = TextStyle(
                     fontSize = 12.sp,
                     fontFamily = FontFamily(Font(R.font.lato_regular)),
-                    fontWeight = FontWeight(400),
-                    color = Color(0xFF707070),
+                    color = Color(0xFF707070)
                 )
             )
             if (msg.isMine && msg.deliveredDoubleTick) {
                 Spacer(Modifier.width(6.dp))
                 Icon(
-                    painter = painterResource(R.drawable.ic_check_double),
-                    contentDescription = null,
+                    painterResource(R.drawable.ic_check_double),
+                    null,
                     tint = Color(0xFFFFC753),
                     modifier = Modifier.size(16.dp)
                 )
@@ -423,6 +741,122 @@ private fun MessageBubble(msg: ChatMessage) {
         }
     }
 }
+@Composable
+private fun FilePlaceholder(filename: String) {
+    Row(
+        Modifier
+            .widthIn(min = 160.dp, max = 240.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_attach), // یا هر آیکن فایل
+            contentDescription = null,
+            tint = Color(0xFF707070),
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            filename,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = TextStyle(
+                fontSize = 13.sp,
+                fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                color = Color(0xFF292D32)
+            )
+        )
+    }
+}
+
+
+
+
+
+@Composable
+private fun VoiceMessageBubble(audioUrl: String) {
+    var isLoading by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0f) }
+    var durationMs by remember { mutableStateOf(0L) }
+
+    val player = remember { android.media.MediaPlayer() }
+
+    DisposableEffect(audioUrl) {
+        isLoading = true
+        progress = 0f
+        isPlaying = false
+        try {
+            player.reset()
+            player.setDataSource(audioUrl)     // استریم مستقیم
+            player.setOnPreparedListener {
+                durationMs = player.duration.toLong()
+                isLoading = false
+            }
+            player.setOnCompletionListener {
+                isPlaying = false
+                progress = 0f
+            }
+            player.prepareAsync()
+        } catch (_: Exception) {
+            isLoading = false
+        }
+        onDispose {
+            runCatching { player.stop() }
+            player.release()
+        }
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying && !isLoading && durationMs > 0) {
+            player.start()
+            while (isPlaying) {
+                delay(60)
+                progress = player.currentPosition / durationMs.toFloat()
+            }
+        } else if (player.isPlaying) {
+            player.pause()
+        }
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            IconButton(onClick = { isPlaying = !isPlaying }) {
+                Icon(
+                    painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
+                    null, tint = Color(0xFF292D32)
+                )
+            }
+        }
+
+        Box(
+            Modifier
+                .weight(1f)
+                .height(24.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFFF2F4F7))
+                .padding(horizontal = 6.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Waveform(progress = progress)
+        }
+
+        Spacer(Modifier.width(8.dp))
+        Text(formatMillis(durationMs), fontSize = 12.sp, color = Color(0xFF707070))
+    }
+}
+
 
 @Composable
 private fun ReviewCard(
@@ -609,12 +1043,14 @@ private fun OutlinedSoftGreen(text: String) {
 @Composable
 private fun ChatInputBar(
     value: String,
+    isRecording: Boolean,
     onValueChange: (String) -> Unit,
     emojiIcon: Painter,
     micIcon: Painter,
     sendIcon: Painter,
     onSend: () -> Unit,
-    // NEW:
+    onEmojiClick: () -> Unit = {},
+            // NEW:
     onAttachClick: () -> Unit = {},
     showSend: Boolean = true,
     onMicLongPressStart: () -> Unit = {},
@@ -630,8 +1066,10 @@ private fun ChatInputBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            painter = emojiIcon, contentDescription = "emoji", tint = Color(0xFFACACAC),
-            modifier = Modifier.size(24.dp)
+            painter = emojiIcon,
+            contentDescription = "emoji",
+            tint = Color(0xFFACACAC),
+            modifier = Modifier.size(24.dp).clickable { onEmojiClick() } // 👈
         )
         Spacer(Modifier.width(8.dp))
 
@@ -669,11 +1107,11 @@ private fun ChatInputBar(
                         onLongPress = { onMicLongPressStart() },
                         onPress = {
                             val released = tryAwaitRelease()
-                            // هر حالتی رها شد/لغو شد:
                             onMicLongPressEnd()
                         }
                     )
-                },
+                }
+,
             contentAlignment = Alignment.Center
         ) {
             Icon(painter = micIcon, contentDescription = "mic", tint = Color(0xFFB5BBCA))
@@ -1310,43 +1748,38 @@ private fun VoicePreview(
     uri: Uri,
     onRemove: () -> Unit
 ) {
+    val ctx = LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(0f) }
     var durationMs by remember { mutableStateOf(0L) }
-    val ctx = LocalContext.current
-    val player = remember {
-        android.media.MediaPlayer().apply {
-            setOnCompletionListener {
-                isPlaying = false
-                progress = 0f
-            }
-        }
-    }
+    val player = remember { android.media.MediaPlayer() }
+
     DisposableEffect(uri) {
         try {
             player.reset()
             player.setDataSource(ctx, uri)
             player.prepare()
             durationMs = player.duration.toLong()
+            player.setOnCompletionListener {
+                isPlaying = false
+                progress = 0f
+            }
         } catch (_: Exception) {}
         onDispose {
-            try { player.stop() } catch (_: Exception) {}
+            runCatching { player.stop() }
             player.release()
         }
     }
 
-    val scope = rememberCoroutineScope()
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
-            scope.launch {
-                while (isPlaying && durationMs > 0) {
-                    delay(50)
-                    progress = player.currentPosition / durationMs.toFloat()
-                }
-            }
             player.start()
-        } else {
-            if (player.isPlaying) player.pause()
+            while (isPlaying && durationMs > 0) {
+                delay(60)
+                progress = player.currentPosition / durationMs.toFloat()
+            }
+        } else if (player.isPlaying) {
+            player.pause()
         }
     }
 
@@ -1361,19 +1794,37 @@ private fun VoicePreview(
         IconButton(onClick = { isPlaying = !isPlaying }) {
             Icon(
                 painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-                contentDescription = null,
-                tint = Color(0xFF292D32)
+                null, tint = Color(0xFF292D32)
             )
         }
-        Waveform(progress = progress)
+
+        // Waveform + Seek (ساده با کلیک)
+        Box(
+            Modifier
+                .weight(1f)
+                .height(28.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF2F4F7))
+                .clickable {
+                    // جهش ساده به وسط در کلیک؛ اگر خواستی با PointerPosition دقیق‌تر کن
+                    val target = (durationMs * 0.5f).toInt()
+                    runCatching { player.seekTo(target) }
+                }
+                .padding(horizontal = 6.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Waveform(progress = progress)
+        }
+
         Spacer(Modifier.width(8.dp))
         Text(formatMillis(durationMs), fontSize = 12.sp, color = Color(0xFF707070))
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
         IconButton(onClick = onRemove) {
             Icon(painterResource(R.drawable.ic_delete), null, tint = Color(0xFFE21D20))
         }
     }
 }
+
 @Composable
 private fun RecordingInlineBar(
     millis: Long,
@@ -1419,7 +1870,7 @@ private fun RecordingInlineBar(
 @Composable
 private fun Waveform(progress: Float) {
     val bars = 40
-    val rnd = remember { java.util.Random(42) }
+    val rnd = remember { Random(42) }
     val heights = remember { List(bars) { 6 + rnd.nextInt(18) } }
     Row(
         Modifier
@@ -1446,6 +1897,29 @@ private fun formatMillis(ms: Long): String {
     val s = (ms / 1000) % 60
     val m = (ms / 1000) / 60
     return "%02d:%02d".format(m, s)
+}
+
+fun formatBubbleTime(epoch: Long?, rawIso: String?): String {
+    // 1) منبع زمان
+    val instant = when {
+        (epoch ?: 0L) > 0 -> Instant.ofEpochMilli(epoch!!)
+        !rawIso.isNullOrBlank() -> runCatching { Instant.parse(rawIso) }.getOrNull()
+        else -> null
+    } ?: return ""
+
+    // 2) به منطقه زمانی دستگاه
+    val zdt = instant.atZone(ZoneId.systemDefault())
+
+    // 3) امروز فقط ساعت/دقیقه؛ روزهای قبل: dd MMM (یا اگر سال عوض شده: dd MMM yyyy)
+    val today = LocalDate.now(zdt.zone)
+    val date = zdt.toLocalDate()
+
+    val pattern = when {
+        date.isEqual(today) -> "HH:mm"
+        date.year == today.year -> "dd MMM"
+        else -> "dd MMM yyyy"
+    }
+    return DateTimeFormatter.ofPattern(pattern).format(zdt)
 }
 
 /* ---------------- Pick Source Sheet ---------------- */

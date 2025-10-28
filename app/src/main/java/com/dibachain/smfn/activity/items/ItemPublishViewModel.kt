@@ -11,6 +11,31 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
+// ✅ مدل پاسخ API بر اساس JSON واقعی
+data class PublishItemResponse(
+    val success: Boolean,
+    val msg: String?,
+    val item: PublishedItem?
+)
+
+data class PublishedItem(
+    val _id: String?,
+    val owner: String?,
+    val title: String?,
+    val description: String?,
+    val category: List<String>?,
+    val images: List<String>?,
+    val thumbnail: String?,
+    val verifyVideo: String?,
+    val condition: String?,
+    val tags: List<String>?,
+    val value: Int?,
+    val status: String?,
+    val createdAt: String?,
+    val updatedAt: String?
+)
+
+// ✅ وضعیت UI
 data class PublishUiState(
     val loading: Boolean = false,
     val error: String? = null,
@@ -36,7 +61,7 @@ class ItemPublishViewModel : ViewModel() {
                 token = token,
                 title = payload.name,
                 description = payload.description,
-                // ⚠️ باید ID دسته‌بندی‌ها باشند نه اسم نمایشی
+                // ⚠️ categoryIds باید شامل id باشد
                 categoryIds = payload.categories.toList(),
                 condition = payload.condition,
                 tags = payload.tags,
@@ -50,11 +75,20 @@ class ItemPublishViewModel : ViewModel() {
                 note = null
             )
             _ui.value = when (r) {
-                is Result.Success -> PublishUiState(successId = r.data)
-                is Result.Error   -> PublishUiState(error = r.message ?: "Failed")
+                is Result.Success -> {
+                    val id = r.data.item?._id
+                    if (id.isNullOrBlank()) {
+                        PublishUiState(error = "Item created but missing ID")
+                    } else {
+                        PublishUiState(successId = id)
+                    }
+                }
+                is Result.Error -> PublishUiState(error = r.message ?: "Failed to publish item")
             }
         }
     }
 
-    fun clearError() { _ui.value = _ui.value.copy(error = null) }
+    fun clearError() {
+        _ui.value = _ui.value.copy(error = null)
+    }
 }

@@ -70,7 +70,9 @@ fun ItemDetailScreen(
     onShare: () -> Unit = {},
     onMore: () -> Unit = {},
     onToggleFavorite: () -> Unit = {},
-
+    ownerId: String,
+    ctaText: String = "Swap",
+            onSellerClick: (String) -> Unit = {},
     // اطلاعات آیتم/فروشنده
     title: String,
     sellerAvatar: Painter,
@@ -162,7 +164,8 @@ fun ItemDetailScreen(
                     staricon = sellerstaricon,
                     ratingText = sellerRatingText,
                     location = sellerLocation,
-                    onClick = { /* nav to profile */ }
+                    ownerId=ownerId,
+                    onClick = { onSellerClick(ownerId) }
                 )
 
                 Spacer(Modifier.height(16.dp))
@@ -275,7 +278,7 @@ fun ItemDetailScreen(
 
                 // دکمه Swap
                 GradientPrimaryButton(
-                    text = "Swap",
+                    text = ctaText,
                     onClick = onSwap,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -610,8 +613,8 @@ fun DetailHeaderSlider(
                 .padding(end = 22.dp, top = 32.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            CircleIconButton(icon = shareIcon, onClick = onShare)
-            CircleIconButton(icon = moreIcon, onClick = onMore)
+//            CircleIconButton(icon = shareIcon, onClick = onShare)
+//            CircleIconButton(icon = moreIcon, onClick = onMore)
         }
 
         // شمارنده و دات‌ها
@@ -633,15 +636,15 @@ fun DetailHeaderSlider(
         }
 
         // بج ستاره پایین راست
-        FavoriteBadge(
-            icon = starIcon,
-            count = likeCount,
-            highlighted = isFavorite,
-            onClick = onToggleFavorite,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 19.dp, bottom = 14.dp)
-        )
+//        FavoriteBadge(
+//            icon = starIcon,
+//            count = likeCount,
+//            highlighted = isFavorite,
+//            onClick = onToggleFavorite,
+//            modifier = Modifier
+//                .align(Alignment.BottomEnd)
+//                .padding(end = 19.dp, bottom = 14.dp)
+//        )
     }
 }
 
@@ -752,14 +755,15 @@ fun SellerCard(
     staricon: Painter?,
     ratingText: String,
     location: String,
-    onClick: () -> Unit
+    ownerId: String,
+    onClick: (String) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(34.5.dp))
             .background(Color(0xFFF2F4F7))
-            .clickable { onClick() }
+            .clickable { onClick(ownerId) }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

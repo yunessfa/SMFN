@@ -10,6 +10,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import java.io.IOException
+data class CreateItemResponse(
+    val success: Boolean,
+    val msg: String?,
+    val item: CreatedItem?
+)
+
+data class CreatedItem(
+    val _id: String?,
+    val owner: String?,
+    val title: String?,
+    val description: String?,
+    val category: List<String>?,
+    val images: List<String>?,
+    val thumbnail: String?,
+    val verifyVideo: String?,
+    val condition: String?,
+    val tags: List<String>?,
+    val value: Int?,
+    val location: Location?,
+    val status: String?,
+    val createdAt: String?,
+    val updatedAt: String?
+)
+
+data class Location(
+    val country: String?,
+    val city: String?
+)
 
 class ItemCreateRepository(
     private val api: ItemsCreateApi,
@@ -30,7 +58,7 @@ class ItemCreateRepository(
         thumbnail: Uri,
         verifyVideo: Uri,
         note: String? = null
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<CreateItemResponse> = withContext(Dispatchers.IO) {
         try {
             val res = api.createItem(
                 token = token,
@@ -44,12 +72,16 @@ class ItemCreateRepository(
                 note = note?.asRb(),
                 country = country.asRb(),
                 city = city.asRb(),
-                images = urisToParts(appContext, images, "images"), // قبلاً "images" بود
+                images = urisToParts(appContext, images, "images"),
                 thumbnail = uriToPart(appContext, thumbnail, "thumbnail"),
                 verifyVideo = uriToPart(appContext, verifyVideo, "verifyVideo")
             )
-            if (res.success) Result.Success(res.id ?: "")
-            else Result.Error(message = res.msg.ifBlank { "Create failed" })
+
+            if (res.success) {
+                Result.Success(res) // ✅ حالا کل پاسخ رو می‌فرستیم، شامل item._id
+            } else {
+                Result.Error(message = res.msg?.ifBlank { "Create failed" } ?: "")
+            }
         } catch (e: HttpException) {
             Result.Error(code = e.code(), message = "Server error (${e.code()})")
         } catch (e: IOException) {
@@ -58,4 +90,5 @@ class ItemCreateRepository(
             Result.Error(message = e.message ?: "Unexpected error")
         }
     }
+
 }

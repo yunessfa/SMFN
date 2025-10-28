@@ -32,6 +32,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dibachain.smfn.R
+import com.dibachain.smfn.activity.feature.product.LocationsField
 
 /* ------------ Data model ------------ */
 data class EditableItem(
@@ -51,6 +52,9 @@ fun EditItemScreen(
     backIcon: Painter? = null,
     onBack: () -> Unit = {},
     initial: EditableItem = EditableItem(),
+    categoryRepo: com.dibachain.smfn.data.CategoryRepository,
+    tokenProvider: () -> String,
+    onChange: (EditableItem) -> Unit,
     mainCategories: List<String> = listOf("Electronics", "Fashion", "Home & Living"),
     subCategoriesProvider: (String?) -> List<String> = { main ->
         when (main) {
@@ -60,13 +64,6 @@ fun EditItemScreen(
             else -> emptyList()
         }
     },
-    availableLocations: List<String> = listOf(
-        "Washington, D.C.",
-        "Warsaw City",
-        "Garden City",
-        "Dubai, U.A.E",
-        "Abu Dhabi"
-    ),
     onConfirm: (EditableItem) -> Unit = {}
 ) {
     var state by remember { mutableStateOf(initial) }
@@ -220,111 +217,21 @@ fun EditItemScreen(
             Spacer(Modifier.height(14.dp))
 
             // Main Category
-            ExposedDropdownMenuBox(
-                expanded = mainExpanded,
-                onExpandedChange = { mainExpanded = it },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = state.mainCategory ?: "",
-                    onValueChange = {},
-                    readOnly = true,
-                    placeholder = {
-                        Text(
-                            text = "Select  Main category",
-                            style = TextStyle(
-                                fontSize = 14.sp,
-                                lineHeight = 21.sp,
-                                fontFamily = FontFamily(Font(R.font.inter_regular)),
-                                fontWeight = FontWeight(400),
-                                color = Color(0xFFAEB0B6),
-                                textAlign = TextAlign.End,
-                            ),
-                            modifier = Modifier.padding(top = 12.dp)
-                        )
-
-                    },
-                    trailingIcon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_down),null, tint = Color(0xFF292D32),
-                        modifier = Modifier.size(26.dp)
-                        ) },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                        .shadow(elevation = 18.dp, spotColor = Color(0x40000000), ambientColor = Color(0x40000000))
-                        .clip(corner)
-                        .height(73.dp)
-                        .clip(corner),
-                    shape = corner,
-                    colors = fieldColors
-                )
-                ExposedDropdownMenu(expanded = mainExpanded, onDismissRequest = { mainExpanded = false }) {
-                    mainCategories.forEach { cat ->
-                        DropdownMenuItem(
-                            text = { Text(cat) },
-                            onClick = {
-                                state = state.copy(mainCategory = cat, subCategory = null)
-                                mainExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
             Spacer(Modifier.height(14.dp))
-
-            // Sub Category
-            ExposedDropdownMenuBox(
-                expanded = subExpanded,
-                onExpandedChange = {
-                    if (state.mainCategory != null) subExpanded = it
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = state.subCategory ?: "",
-                    onValueChange = {},
-                    readOnly = true,
-                    placeholder = {
-                        Text(
-                            text = "Select Subcategory",
-                            style = TextStyle(
-                                fontSize = 14.sp,
-                                lineHeight = 21.sp,
-                                fontFamily = FontFamily(Font(R.font.inter_regular)),
-                                fontWeight = FontWeight(400),
-                                color = Color(0xFFAEB0B6),
-                                textAlign = TextAlign.Center,
-                            ),
-                            modifier = Modifier.padding(top = 12.dp)
-                        )
-
-                    },
-                    trailingIcon = { Icon(painterResource(R.drawable.ic_keyboard_arrow_down),null, tint = Color(0xFF292D32),
-                        modifier = Modifier.size(26.dp)
-                    ) },
-                    enabled = state.mainCategory != null,
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
-                        .shadow(elevation = 18.dp, spotColor = Color(0x40000000), ambientColor = Color(0x40000000))
-                        .clip(corner)
-                        .height(73.dp)
-                        .clip(corner),
-                    shape = corner,
-                    colors = fieldColors
-                )
-                ExposedDropdownMenu(expanded = subExpanded, onDismissRequest = { subExpanded = false }) {
-                    subcats.forEach { cat ->
-                        DropdownMenuItem(
-                            text = { Text(cat) },
-                            onClick = {
-                                state = state.copy(subCategory = cat)
-                                subExpanded = false
-                            }
-                        )
-                    }
+            CategoriesField(
+                repo = categoryRepo,
+                tokenProvider = tokenProvider,
+                initialParent = null, // اگر از ui.form پر می‌کنی، اینجا مقدار بده
+                initialChild = null,
+                onSelected = { parent, child ->
+                    onChange(state.copy(
+                        mainCategory = parent.name,
+                        subCategory = child?.name
+                    ))
+                    // اگر ID لازم داری، EditableItem رو توسعه بده:
+                    // mainCategoryId = parent.id, subCategoryId = child?.id
                 }
-            }
+            )
 
             Spacer(Modifier.height(18.dp))
 
@@ -385,11 +292,17 @@ fun EditItemScreen(
 
 
 
-            LocationSelector(
-                value = state.location,
-                items = availableLocations,            // همون لیست کامل کشور/شهر
-                onSelect = { city -> state = state.copy(location = city) }
+// جای LocationSelector قبلی
+            LocationsField(
+                tokenProvider = { /* اگه لوکیشن توکن نمی‌خواد، null برگردون */ null },
+                initial = state.location, // نمونه: "Dubai, U.A.E" یا هرچی داری
+                onSelected = { city, country, countryCode ->
+                    state = state.copy(location = "$city, $country")
+                    // اگه Country/City رو جدا لازم داری، اینجا نگه‌دارشون
+                },
+                isError = false
             )
+
 
 
 
@@ -397,7 +310,7 @@ fun EditItemScreen(
             Spacer(Modifier.height(22.dp))
 
             // Confirm
-            if (isValid) {
+            if (true) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -601,28 +514,28 @@ fun LocationSelector(
 
 /* ------------ Previews ------------ */
 
-@Preview(showBackground = true, backgroundColor = 0xFFF4F4F4)
-@Composable
-private fun EditItem_Empty_Preview() {
-    EditItemScreen(
-        backIcon = null, // آیکن رو خودت می‌گذاری
-        initial = EditableItem(), // خالی → دکمه غیرفعال
-        onConfirm = {}
-    )
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFF4F4F4)
-@Composable
-private fun EditItem_Filled_Preview() {
-    EditItemScreen(
-        initial = EditableItem(
-            title = "Canon4000D",
-            description = "New",
-            mainCategory = null,           // مثل طرح دوم: هنوز انتخاب نشده
-            subCategory = null,
-            valueAED = "200",
-            location = "Garden City"
-        ),
-        onConfirm = {}
-    )
-}
+//@Preview(showBackground = true, backgroundColor = 0xFFF4F4F4)
+//@Composable
+//private fun EditItem_Empty_Preview() {
+//    EditItemScreen(
+//        backIcon = null, // آیکن رو خودت می‌گذاری
+//        initial = EditableItem(), // خالی → دکمه غیرفعال
+//        onConfirm = {}
+//    )
+//}
+//
+//@Preview(showBackground = true, backgroundColor = 0xFFF4F4F4)
+//@Composable
+//private fun EditItem_Filled_Preview() {
+//    EditItemScreen(
+//        initial = EditableItem(
+//            title = "Canon4000D",
+//            description = "New",
+//            mainCategory = null,           // مثل طرح دوم: هنوز انتخاب نشده
+//            subCategory = null,
+//            valueAED = "200",
+//            location = "Garden City"
+//        ),
+//        onConfirm = {}
+//    )
+//}

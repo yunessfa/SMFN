@@ -41,8 +41,9 @@ data class CollectionItemUi(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollectionScreen(
-    items: List<SelectableItemUi>,
+    items: List<CollectionItemUi>,
     onBack: () -> Unit,
+    title: String,
     onPublish: (selectedIds: List<String>) -> Unit
 ) {
     var query by remember { mutableStateOf(TextFieldValue("")) }
@@ -58,12 +59,13 @@ fun CollectionScreen(
     }
 
     Scaffold(
+        containerColor = Color.White,       // ← پس‌زمینه‌ی خود اسکیفولد سفید
         topBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(top = 32.dp, bottom = 24.dp),
+                    .padding(top = 64.dp, bottom = 24.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -77,7 +79,7 @@ fun CollectionScreen(
                     Icon(painterResource(R.drawable.ic_swap_back), contentDescription = null, tint = Color(0xFF292D32), modifier = Modifier.size(22.dp))
                 }
                 Text(
-                    "Fashion Collection",
+                    title,
                     style = TextStyle(
                         fontSize = 24.sp,
                         lineHeight = 33.3.sp,
@@ -123,7 +125,7 @@ fun CollectionScreen(
 /* ----------------- کارت آیتم انتخابی ----------------- */
 @Composable
 private fun ItemSelectableCard(
-    data: SelectableItemUi,
+    data: CollectionItemUi,
     selected: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
@@ -171,14 +173,14 @@ private fun ItemSelectableCard(
 }
 
 /* ----------------- پیش‌نمایش ----------------- */
-//@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF)
+//@Preview(showBackground = true)
 //@Composable
 //private fun SelectItems_Preview() {
 //    val demo = listOf(
-//        SelectableItemUi("Black&White", "https://picsum.photos/seed/a/600/600"),
-//        SelectableItemUi("Green Dress", "https://picsum.photos/seed/b/600/600"),
-//        SelectableItemUi("Kids Set", "https://picsum.photos/seed/c/600/600"),
-//        SelectableItemUi("Pants", "https://picsum.photos/seed/d/600/600"),
+////        SelectableItemUi("Black&White", painterResource(R.drawable.items1)),
+//        CollectionItemUi("Green Dress", "https://picsum.photos/seed/b/600/600"),
+//        CollectionItemUi("Kids Set", "https://picsum.photos/seed/c/600/600"),
+//        CollectionItemUi("Pants", "https://picsum.photos/seed/d/600/600"),
 //    )
 //    CollectionScreen(
 //        items = demo,

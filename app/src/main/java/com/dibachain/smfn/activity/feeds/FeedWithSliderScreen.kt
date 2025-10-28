@@ -42,14 +42,21 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import coil.size.Scale
 import com.dibachain.smfn.activity.feature.profile.GradientText
+import com.dibachain.smfn.activity.profile.NetworkImageWithShimmer
+import com.dibachain.smfn.activity.profile.ShimmerBox
 import com.dibachain.smfn.navigation.Route
 
 /* ---------------- Top Row ---------------- */
 
 @Composable
 private fun TopRow(
-    avatar: Painter,
+    avatarUrl: String? = null,   // ← جدید
     leftLabel: String = "Global",
     rightLabel: String = "Following",
     selectedTab: Int,
@@ -57,7 +64,8 @@ private fun TopRow(
     rightIcon1: Painter?,
     rightIcon2: Painter?,
     onRightIcon1: () -> Unit,
-    onRightIcon2: () -> Unit
+    onRightIcon2: () -> Unit,
+    onAvatar: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -66,24 +74,27 @@ private fun TopRow(
             .padding(top = 24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Image(
-            painter = avatar,
-            contentDescription = null,
+        NetworkImageWithShimmer(
+            url = avatarUrl,
             modifier = Modifier
                 .size(37.dp)
                 .clip(CircleShape)
+                .clickable(enabled = avatarUrl != null) { onAvatar() },
+            corner = 48.dp, // دایره؛ گوشه زیاد مشکلی ایجاد نمی‌کند چون clip(Circle) شده
+            contentScale = ContentScale.Crop,
+            errorPainter = painterResource(R.drawable.ic_avatar)
         )
 
         Spacer(Modifier.width(12.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SegButton(text = leftLabel, active = selectedTab == 0) { onTabSelected(0) }
             SegButton(text = rightLabel, active = selectedTab == 1) { onTabSelected(1) }
         }
 
         Spacer(Modifier.weight(1f))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             SmallIcon(painter = rightIcon1, onClick = onRightIcon1)
             SmallIcon(painter = rightIcon2, onClick = onRightIcon2)
         }
@@ -126,11 +137,12 @@ private fun SmallIcon(
     Box(
         modifier = Modifier
             .size(24.dp)
+            .sizeIn(24.dp)
             .clickable(enabled = painter != null) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         if (painter != null) {
-            Image(painter = painter, contentDescription = null, modifier = Modifier.size(24.dp))
+            Image(painter = painter, contentDescription = null, modifier = Modifier.size(24.dp).sizeIn(24.dp))
         }
     }
 }
@@ -141,17 +153,19 @@ private fun SmallIcon(
 @Composable
 fun FeedWithSliderScreen(
     avatar: Painter,
+    onAvatar: () -> Unit = {},
     rightIcon1: Painter? = null,
     rightIcon2: Painter? = null,
     sliderItems: List<Media>,
     bottomItems: List<BottomItem>,
+    avatarUrl: String? = null,   // ← جدید
 
     onGetPremiumClick: () -> Unit = {},
     onOpenItem: (index: Int, media: Media) -> Unit = { _, _ -> }, // برای سازگاری
     onNotifications: () -> Unit = {},
 
-
-    isFavorite: (index: Int) -> Boolean = { false },
+    isPremium: Boolean?,
+    isFavoriteAt: (index: Int) -> Boolean = { false },
     onToggleFavorite: (index: Int, media: Media, willBeFavorite: Boolean) -> Unit = { _,_,_ -> },
 
     // کال‌بک‌های پاس‌ترو به MediaSlider
@@ -176,7 +190,8 @@ fun FeedWithSliderScreen(
             .systemBarsPadding()
     ) {
         TopRow(
-            avatar = avatar,
+            onAvatar=onAvatar,
+            avatarUrl = avatarUrl,
             selectedTab = selectedTab,
             onTabSelected = { selectedTab = it },
             rightIcon1 = rightIcon1,
@@ -196,7 +211,7 @@ fun FeedWithSliderScreen(
             // علاقه‌مندی با دو آیکن
             favIconInactive = painterResource(R.drawable.ic_menu_manage_out),
             favIconActive   = painterResource(R.drawable.ic_menu_manage),
-            isFavorite      = isFavorite,
+            isFavoriteAt = isFavoriteAt,
             onToggleFavorite = onToggleFavorite,
 
             // بقیه آیکن‌ها
@@ -236,6 +251,7 @@ fun FeedWithSliderScreen(
                     onGetPremiumClick()
                     showFilterSheet = false
                 },
+                isPremium=isPremium
             )
         }
     }
@@ -247,6 +263,7 @@ fun FilterBottomSheetContent(
     genders: List<String>,
     categories: List<String>,
     selectedGender: String?,
+    isPremium: Boolean?,
     selectedCategory: String?,
     onGenderChange: (String?) -> Unit,
     onCategoryChange: (String?) -> Unit,
@@ -403,14 +420,13 @@ fun FilterBottomSheetContent(
             }
             Spacer(Modifier.height(16.dp))
         }
-
-        /* ===== Luxury (زیر همه) ===== */
-        LuxuryRow(
-            checked = luxurySelected,
-            icon = luxuryIcon,                 // 👈 آیکنِ خودت رو پاس بده
-            onToggle = { luxurySelected = !luxurySelected }
-        )
-
+        if (isPremium == true) {
+            LuxuryRow(
+                checked = luxurySelected,
+                icon = luxuryIcon,                 // 👈 آیکنِ خودت رو پاس بده
+                onToggle = { luxurySelected = !luxurySelected }
+            )
+        }
         Spacer(Modifier.height(14.dp))
 
         /* ===== دکمه پایین ===== */
@@ -498,7 +514,7 @@ private fun AccordionHeader(
 
 
 @Composable
-private fun SearchPill(
+fun SearchPill(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String

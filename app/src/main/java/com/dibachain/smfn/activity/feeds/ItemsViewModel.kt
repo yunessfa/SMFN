@@ -31,15 +31,14 @@ class ItemsViewModel(private val repo: ItemsRepository): ViewModel() {
     private val _state = MutableStateFlow(ItemsUiState(isLoading = true))
     val state: StateFlow<ItemsUiState> = _state
 
-    init { refresh() }
-
-    fun refresh() {
+    fun refresh(token: String) {
         _state.value = ItemsUiState(isLoading = true)
         viewModelScope.launch {
-            when (val r = repo.getActiveItemLites()) {
+            when (val r = repo.getActiveItemLites(token = token)) {
                 is Result.Success -> _state.value = ItemsUiState(items = r.data)
                 is Result.Error   -> _state.value = ItemsUiState(error = r.message ?: "Unknown error")
             }
         }
     }
 }
+

@@ -91,9 +91,11 @@ fun FollowingRequestScreen1(
     onBell: () -> Unit,
     onAccept: (FollowingRequest) -> Unit,
     onDelete: (FollowingRequest) -> Unit,
-    onFollowBack: (FollowingRequest) -> Unit
+    onFollowBack: (FollowingRequest) -> Unit,
+    actionLoadingIds: Set<String> = emptySet() // NEW
 ) {
     Scaffold(
+        containerColor = Color.White,       // ← پس‌زمینه‌ی خود اسکیفولد سفید
         topBar = { NotifTopBar(title = "Following Request", onBack = onBack, onBell = onBell) },
         bottomBar = {} // اگر BottomBar خاصی داری اینجا بذار
     ) { inner ->
@@ -138,14 +140,25 @@ fun FollowingRequestScreen1(
                                     color = Color(0xFF212121),
                                     )
                             )
+                            val isBusy = actionLoadingIds.contains(req.id)
                             if (req.alreadyFollowsYou) {
-                                PillButtonBlack(text = "Follow back") { onFollowBack(req) }
+                                PillButtonBlack(
+                                    text = if (isBusy) "…" else "Follow back",
+                                    onClick = { if (!isBusy) onFollowBack(req) }
+                                )
                             } else {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PillButtonGradient(text = "Accept") { onAccept(req) }
-                                    PillButtonOutlined(text = "Delete") { onDelete(req) }
+                                    PillButtonGradient(
+                                        text = if (isBusy) "…" else "Accept",
+                                        onClick = { if (!isBusy) onAccept(req) }
+                                    )
+                                    PillButtonOutlined(
+                                        text = if (isBusy) "…" else "Delete",
+                                        onClick = { if (!isBusy) onDelete(req) }
+                                    )
                                 }
                             }
+
                         }
                     }
                 }
@@ -165,7 +178,7 @@ data class SwapActivity(
     val time: String,         // "2 hours ago"
     val thumb: Painter
 )
-enum class ActivityStatus { ACCEPTED, REJECTED }
+enum class ActivityStatus { ACCEPTED, REJECTED ,PENDING}
 
 @Composable
 fun SwapActivityScreen(
@@ -204,6 +217,7 @@ fun SwapActivityScreen(
                                 val color = when (act.status) {
                                     ActivityStatus.ACCEPTED -> Color(0xFF42C695) // سبز مطابق شات
                                     ActivityStatus.REJECTED -> Color(0xFFE21D20) // قرمز
+                                    ActivityStatus.PENDING -> Color(0xFFFF6E04) // قرمز
                                 }
                                 Text(
                                     text = act.title,
@@ -269,6 +283,7 @@ fun SwapRequestScreen(
     onViewDetails: (SwapRequest) -> Unit
 ) {
     Scaffold(
+        containerColor = Color.White,       // ← پس‌زمینه‌ی خود اسکیفولد سفید
         topBar = { NotifTopBar("Swap Request", onBack = onBack, onBell = onBell) },
         bottomBar = {}
     ) { inner ->
@@ -424,7 +439,8 @@ private fun FollowingRequestScreen_Preview() {
 private fun SwapActivityScreen_Preview() {
     val list = listOf(
         SwapActivity("1", "Swap rejected", ActivityStatus.REJECTED, "2 hours ago", demoThumb()),
-        SwapActivity("2", "Swap Accepted", ActivityStatus.ACCEPTED, "2 hours ago", demoThumb())
+        SwapActivity("2", "Swap Accepted", ActivityStatus.ACCEPTED, "2 hours ago", demoThumb()),
+        SwapActivity("3", "Swap Pending", ActivityStatus.PENDING, "2 hours ago", demoThumb())
     )
     MaterialTheme {
         SwapActivityScreen(

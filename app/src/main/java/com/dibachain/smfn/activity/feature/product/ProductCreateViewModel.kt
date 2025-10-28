@@ -4,6 +4,7 @@ package com.dibachain.smfn.activity.feature.product
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dibachain.smfn.activity.items.PublishUiState
 import com.dibachain.smfn.common.Result
 import com.dibachain.smfn.data.Repos
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,8 +58,15 @@ class ProductCreateViewModel : ViewModel() {
                 note = note
             )
             _state.value = when (r) {
-                is Result.Success -> CreateItemUiState(successId = r.data)
-                is Result.Error -> CreateItemUiState(error = r.message ?: "Error",)
+                is Result.Success -> {
+                    val id = r.data.item?._id
+                    if (id.isNullOrBlank()) {
+                        CreateItemUiState(error = "Item created but missing ID")
+                    } else {
+                        CreateItemUiState(successId = id)
+                    }
+                }
+                is Result.Error -> CreateItemUiState(error = r.message ?: "Failed to publish item")
             }
         }
     }

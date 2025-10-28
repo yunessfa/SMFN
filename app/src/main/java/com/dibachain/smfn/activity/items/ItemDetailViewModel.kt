@@ -25,11 +25,11 @@ class ItemDetailViewModel(
     var uiState = androidx.compose.runtime.mutableStateOf(ItemDetailUiState())
         private set
 
-    fun load(itemId: String) {
+    fun load(token: String, itemId: String) {
         uiState.value = uiState.value.copy(loading = true, error = null)
 
         viewModelScope.launch {
-            val itemRes = repo.loadItem(itemId)
+            val itemRes = repo.loadItem(token,itemId)
             val reviewRes = repo.loadReviews(itemId)
 
             val current = uiState.value.copy(loading = false)

@@ -7,7 +7,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,7 +19,6 @@ import com.dibachain.smfn.common.ShimmerBox
 import com.dibachain.smfn.data.FavoriteRepository
 import com.dibachain.smfn.data.ItemsRepository
 import com.dibachain.smfn.data.remote.NetworkModule
-import com.dibachain.smfn.flags.AuthPrefs
 import com.dibachain.smfn.ui.components.BottomItem
 import com.dibachain.smfn.ui.components.Media
 import kotlinx.coroutines.launch
@@ -29,16 +27,25 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     onOpenItem: (itemId: String) -> Unit,
     onGetPremiumClick: () -> Unit = {},
-    onNotifications: () -> Unit = {}
+    tokenProvider: () -> String,
+    isPremium: Boolean?,
+    avatarUrl: String? = null,
+    onNotifications: () -> Unit = {},
+    onAvatar: () -> Unit = {}
 ) {
     // ساخت ViewModel با Factory
     val factory = remember { ItemsViewModelFactory(ItemsRepository(NetworkModule.itemsApiApi)) }
     val itemsVm: ItemsViewModel = viewModel(factory = factory)
+    val tokenLatest by rememberUpdatedState(newValue = tokenProvider())
 
     // توکن از AuthPrefs
 //    val authPrefs = remember { AuthPrefs(LocalContext.current) }
 //    val token by authPrefs.token.collectAsState(initial = "")
-
+    LaunchedEffect(tokenLatest) {
+        if (tokenLatest.isNotBlank()) {
+            itemsVm.refresh(tokenLatest)
+        }
+    }
     // Repo علاقه‌مندی
     val favoriteRepo = remember { FavoriteRepository(NetworkModule.favoriteApi) }
     val scope = rememberCoroutineScope()
@@ -72,7 +79,9 @@ fun HomeScreen(
 
     // ⬇️ مجموعه‌ی آیدی‌های فِیو
     val favoriteIds = remember { mutableStateOf(setOf<String>()) }
-    // اسنک‌بار هاست (اگه توی اسکافلد خودت داری، از همون استفاده کن)
+    LaunchedEffect(state.items) {
+        favoriteIds.value = state.items.filter { it.isFavorite }.map { it.id }.toSet()
+    }    // اسنک‌بار هاست (اگه توی اسکافلد خودت داری، از همون استفاده کن)
 //    Scaffold(
 //        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
 //    ) {
@@ -87,11 +96,11 @@ fun HomeScreen(
 
                 state.error != null -> ErrorHomeScaffold(
                     error = state.error!!,
-                    onRetry = { itemsVm.refresh() }
+                    onRetry = { itemsVm.refresh(tokenLatest) }
                 )
 
                 state.items.isEmpty() -> EmptyHomeScaffold(
-                    onRetry = { itemsVm.refresh() }
+                    onRetry = { itemsVm.refresh(tokenLatest) }
                 )
 
                 else -> {
@@ -105,13 +114,16 @@ fun HomeScreen(
 
                     FeedWithSliderScreen(
                         avatar = avatarPainter,
+                        onAvatar=onAvatar,
                         rightIcon1 = right1Painter,
                         rightIcon2 = right2Painter,
+                        isPremium = isPremium,
+                        avatarUrl =avatarUrl,
                         // آیکن‌های روی کارت را پاس بده (از ریسورس‌های خودت)
                         sliderItems = sliderItems,
                         bottomItems = bottomItems,
-                        isFavorite = { index ->
-                            val id = idList.getOrNull(index)
+                        isFavoriteAt = { idx ->
+                            val id = idList.getOrNull(idx)
                             id != null && favoriteIds.value.contains(id)
                         },
                         onToggleFavorite = { index, _, willBeFavorite ->
@@ -121,16 +133,23 @@ fun HomeScreen(
                             else
                                 favoriteIds.value - id
 
-                            // (اختیاری) سینک با سرور:
-                            // scope.launch {
-                            //   runCatching {
-                            //     if (willBeFavorite) favoriteRepo.add(id) else favoriteRepo.remove(id)
-                            //   }.onFailure {
-                            //     // رول‌بک لوکال در صورت خطا
-                            //     favoriteIds.value = if (willBeFavorite) favoriteIds.value - id else favoriteIds.value + id
-                            //     snackbarHostState.showSnackbar("Failed to update favorite")
-                            //   }
-                            // }
+                             scope.launch {
+                               runCatching {
+                                 if (willBeFavorite){ favoriteRepo.addFavorite(
+                                     { tokenProvider() }, // ✅ رشته‌ی توکن
+                                     id
+                                 )}
+                                   else{
+                                     favoriteRepo.removeFavorite(
+                                         { tokenProvider() },
+                                         id
+                                     )
+                                   }
+                               }.onFailure {
+                                 favoriteIds.value = if (willBeFavorite) favoriteIds.value - id else favoriteIds.value + id
+                                 snackbarHostState.showSnackbar("Failed to update favorite")
+                               }
+                             }
                         },
                         onOpenItem = { index, _ ->
                             // دیگه روی کارت کلیک نداریم؛ ولی اگر جایی لازم شد:

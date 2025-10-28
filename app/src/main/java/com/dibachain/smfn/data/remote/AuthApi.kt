@@ -18,17 +18,23 @@ data class ProfileSelfRes(
 )
 
 data class ProfileSelfData(
+    val user: User?,                  // ← چون توی JSON داریم "user": {...}
+    val followersCount: Int? = 0,
+    val followingCount: Int? = 0
+)
+
+data class User(
     val _id: String?,
     val phone: String?,
     val username: String?,
     val fullname: String?,
     val email: String?,
     val roles: String? = null,
-    val link: String? = null,                // آدرس آواتار/لینک تصویر
+    val link: String? = null,
     val reviewDeleteCount: Int? = null,
     val isPremium: Boolean? = null,
     val isEmailVerified: Boolean? = null,
-    @Json(name = "isKyclVerified") val isKycVerified: Boolean? = null, // تایپوی سرور
+    @Json(name = "isKyclVerified") val isKycVerified: Boolean? = null, // typo سرور
     val lock: Boolean? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
@@ -36,12 +42,17 @@ data class ProfileSelfData(
     val location: Location? = null,
     val privacy: Privacy? = null
 ) {
-    data class Location(val country: String? = null, val city: String? = null)
+    data class Location(
+        val country: String? = null,
+        val city: String? = null
+    )
+
     data class Privacy(
         val sendMessage: Boolean? = null,
         val showFollowerAndFollowing: Boolean? = null
     )
 }
+
 
 
 data class ApiLoginResponse(

@@ -19,6 +19,8 @@ object NetworkModule {
     val itemsApiApi: ItemsApi by lazy {
         retrofit.create(ItemsApi::class.java)
     }
+    val chatApi: ChatApi by lazy { retrofit.create(ChatApi::class.java) }
+    val messageApi: MessageApi by lazy { retrofit.create(MessageApi::class.java) }
     val favoriteApi: FavoriteApi by lazy {
         retrofit.create(FavoriteApi::class.java)
     }
@@ -39,6 +41,10 @@ object NetworkModule {
     val profileApi: ProfileApi by lazy {
         retrofit.create(ProfileApi::class.java)
     }
+    val followApi: FollowApi by lazy {
+        retrofit.create(FollowApi::class.java)
+    }
+
     private val okHttp = OkHttpClient.Builder()
         .addInterceptor(logging)
         .build()

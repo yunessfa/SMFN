@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +36,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import kotlinx.coroutines.launch
 import com.dibachain.smfn.R
+import kotlinx.coroutines.launch // فقط اگر جایی از scope.launch استفاده می‌کنی
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.VideoView
@@ -117,8 +123,7 @@ fun ProfileStepperScreen(
                     e.msg
                 )
 
-                ProfileEvent.Done -> {/* handled by onDone callback بالا */
-                }
+                ProfileEvent.Done -> { }
 
                 ProfileEvent.GoNext -> {}
             }
@@ -288,7 +293,7 @@ fun ProfileStepperScreen(
                         1 -> vm.savePersonalAndNext()
                         2 -> vm.saveAvatarAndNext()
                         3 -> vm.saveKycAndNext()
-                        4 -> vm.submitInterestsToServer(onRequirePremium = onGetPremiumClick)
+                        4 -> vm.submitInterestsToServer()
                     }
                 }
 
@@ -636,7 +641,9 @@ private fun GenderFieldExact(
     val borderClr = if (isError) Color(0xFFDC3A3A) else BorderColor
     val arrowRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "arrow")
 
-    // ظرفِ فیلد که قدش با باز/بسته شدن انیمیت می‌شود
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -645,24 +652,20 @@ private fun GenderFieldExact(
             .background(Color.White, shape)
             .animateContentSize()
     ) {
-        // ردیفِ بالایی (نمایش مقدار یا placeholder + آیکن چِورون)
         Row(
             modifier = Modifier
                 .height(64.dp)
                 .fillMaxWidth()
-                .clickable { expanded = !expanded }
+                .clickable {
+                    // ⬅️ بستن کیبورد و پاک کردن فوکوس پیش از باز کردن لیست
+                    focusManager.clearFocus(force = true)
+                    keyboardController?.hide()
+                    expanded = !expanded
+                }
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-//                Row(verticalAlignment = Alignment.CenterVertically) {
-//                    Text(
-//                        "$label ",
-//                        color = LabelColor,
-//                        fontSize = 12.sp
-//                    )
-//                    Text("*", color = Color(0xFFDC3A3A), fontSize = 12.sp)
-//                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = value ?: label,
@@ -671,7 +674,7 @@ private fun GenderFieldExact(
                 )
             }
             Icon(
-                painterResource(R.drawable.ic_chevron_down), // یک آیکن chevron رو در منابع‌ات بگذار
+                painterResource(R.drawable.ic_chevron_down),
                 contentDescription = null,
                 tint = Color(0xFF3C4043),
                 modifier = Modifier
@@ -680,10 +683,9 @@ private fun GenderFieldExact(
             )
         }
 
-        // لیست آیتم‌ها داخل همان کادر
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.fillMaxWidth()) {
-                items.forEachIndexed { index, item ->
+                items.forEach { item ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -696,12 +698,12 @@ private fun GenderFieldExact(
                     ) {
                         Text(item, fontSize = 15.sp, color = Color(0xFF2B2B2B))
                     }
-
                 }
             }
         }
     }
 }
+
 
 ///* --- مرحله KYC ویدئویی: اجازه‌ها + ضبط + پیش‌نمایش + حذف --- */
 @Composable
@@ -817,7 +819,7 @@ private fun StepKycVideo(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(266f / 318f)
+                .aspectRatio(266f / 250f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFFF9F9FB)),
             contentAlignment = Alignment.Center
@@ -842,7 +844,16 @@ private fun StepKycVideo(
                             }
                         }
                     )
-                    // دکمه ضربدر برای «دوباره ضبط»
+                    if (progress != null) {
+                        UploadBar(
+                            percent = progress,
+                            done = done,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(12.dp)
+                                .fillMaxWidth()
+                        )
+                    }
                     IconButton(
                         onClick = {
                             videoUri.let { ctx.contentResolver.delete(it.toUri(), null, null) }
@@ -902,16 +913,7 @@ private fun StepKycVideo(
                     )
                 }
                 // ... درون Box کارت ...
-                if (progress != null) {
-                    UploadBar(
-                        percent = progress,
-                        done = done,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(12.dp)
-                            .fillMaxWidth()
-                    )
-                }
+
 
             }
         }
@@ -957,6 +959,7 @@ private fun OvalMaskOverlay() {
     modifier: Modifier = Modifier
 ) {
     val cardStroke = Color(0xFFECECEC)
+    val scope = rememberCoroutineScope()
 
     // والدها هنوز نیومدن → اسپینر
     if (ui.catLoading && ui.parents.isEmpty()) {
@@ -1033,11 +1036,18 @@ private fun OvalMaskOverlay() {
             // محتوای expand شده (همچنان در LazyListScope)
             if (isExpanded) {
                 if (parent.isPremium) {
-                    // دکمه پرمیوم
+                    // ⬇️ دکمه پرمیوم (همه‌ی کامپوزبل‌ها داخل item)
                     item(key = "premium-$parentId") {
+                        // این‌ها باید داخل item باشند تا @Composable کانتکست داشته باشند
+                        val premiumRequester = remember { BringIntoViewRequester() }
+
+                        LaunchedEffect(isExpanded) {
+                            premiumRequester.bringIntoView()
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bringIntoViewRequester(premiumRequester)
                                 .padding(horizontal = 20.dp, vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1499,7 +1509,7 @@ private fun StepBar(
 }
 
 @Composable
-private fun GradientButton(
+     fun GradientButton(
     modifier: Modifier = Modifier,
     text: String,
     enabled: Boolean = true,

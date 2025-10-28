@@ -26,25 +26,36 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
 import com.dibachain.smfn.R
 
 /* --------- مدل داده ---------- */
+//data class MessageItem(
+//    val id: String,
+//    val avatar: Painter,
+//    val name: String,
+//    val preview: String,
+//    val time: String,            // "2:30 PM" یا "Sat"
+//    val unread: Int = 0,
+//    val deliveredDoubleTick: Boolean = false
+//)
 data class MessageItem(
     val id: String,
-    val avatar: Painter,
     val name: String,
     val preview: String,
-    val time: String,            // "2:30 PM" یا "Sat"
+    val time: String,
     val unread: Int = 0,
-    val deliveredDoubleTick: Boolean = false
+    val deliveredDoubleTick: Boolean = false,
+    val avatarUrl: String? = null   // فقط URL
 )
+
 
 /* --------- صفحه ---------- */
 @Composable
 fun MessageListScreen(
     items: List<MessageItem>,
     moreIcon: Painter? = null,         // آیکن سه‌نقطه
-    onOpenChat: (String) -> Unit = {}
+    onOpenChat: (chatId: String, partnerName: String, partnerAvatarPath: String?) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -104,7 +115,9 @@ fun MessageListScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             items(items, key = { it.id }) { it ->
-                MessageRow(item = it, onClick = { onOpenChat(it.id) })
+                MessageRow(item = it, onClick = {
+                    onOpenChat(it.id, it.name, it.avatarUrl)
+                })
             }
         }
     }
@@ -182,11 +195,14 @@ private fun MessageRow(item: MessageItem, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val avatarPainter = item.avatarUrl
+            ?.let { rememberAsyncImagePainter(it) }
+            ?: painterResource(R.drawable.ic_avatar)
         Image(
-            painter = item.avatar,
+            painter = avatarPainter,
             contentDescription = null,
             modifier = Modifier.size(44.dp).clip(CircleShape)
         )

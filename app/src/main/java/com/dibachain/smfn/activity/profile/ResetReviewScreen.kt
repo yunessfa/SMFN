@@ -90,6 +90,7 @@ fun ResetReviewWithSheetsScreen(
 
     // صفحه‌ی بالا (بدون تغییر نسبت به قبل + دکمه‌ی Reset)
     Scaffold(
+        containerColor = Color.White,       // ← پس‌زمینه‌ی خود اسکیفولد سفید
         topBar = {
             Row(
                 Modifier

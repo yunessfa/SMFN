@@ -1,12 +1,25 @@
 package com.dibachain.smfn.navigation
 
+import android.net.Uri
+
 sealed class Route(val value: String) {
     data object SplashWhite : Route("splash_white")
     data object SplashOld   : Route("splash_old")
     data object Onboarding  : Route("onboarding")
     data object Login       : Route("login")
     data object Forgot      : Route("forgot")
+    data // اضافه کن:
+    object ChatRoom : Route("chat/{chatId}?title={title}&avatar={avatar}") {
+        fun of(chatId: String, title: String, avatarPath: String? = null): String {
+            val safeTitle = Uri.encode(title)
+            val safeAvatar = Uri.encode(avatarPath ?: "")
+            return "chat/$chatId?title=$safeTitle&avatar=$safeAvatar"
+        }
+    }
+
     data object Verify      : Route("verify")
+    data object EditInterests      : Route("edit-interests")
+    data object InviteFriends       : Route("invite-friends")
     data object SetNewPass  : Route("set_new_pass")
     data object SignUp      : Route("signup")
     data object SignUpVerify: Route("signup_verify")
@@ -21,6 +34,10 @@ sealed class Route(val value: String) {
     data object Review        : Route("review")
     data object Chat : Route("chat/{mode}") {         // 👈 جدید
         fun of(mode: Int) = "chat/$mode"
+    }
+    object SelectItemsForCollection {
+        const val value = "select-items-for-collection/{id}"
+        fun withId(id: String) = "select-items-for-collection/$id"
     }
     data object ProductCreate : Route("product_create")
     data object ItemPreview : Route("item/preview")

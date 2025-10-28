@@ -33,7 +33,10 @@ class CategoryPickerViewModel(
     private fun loadParents() = viewModelScope.launch {
         _ui.value = _ui.value.copy(catLoading = true, error = null)
         when (val r = repo.parents(tokenProvider())) {
-            is Result.Success -> _ui.value = _ui.value.copy(catLoading = false, parents = r.data)
+            is Result.Success -> {
+                val fixed = r.data.map { it.copy(icon = fullIcon(it.icon)) }
+                _ui.value = _ui.value.copy(catLoading = false, parents = fixed)
+            }
             is Result.Error   -> _ui.value = _ui.value.copy(catLoading = false, error = r.message)
         }
     }
@@ -47,19 +50,24 @@ class CategoryPickerViewModel(
             loadChildren(newExpanded)
         }
     }
+    private fun fullIcon(path: String?): String? {
+        if (path.isNullOrBlank()) return null
+        val base = com.dibachain.smfn.core.Public.BASE_URL_IMAGE.trimEnd('/')
+        val rel = if (path.startsWith("/")) path else "/$path"
+        return base + rel
+    }
 
     private fun loadChildren(parentId: String) = viewModelScope.launch {
         _ui.value = _ui.value.copy(loadingChildrenFor = parentId)
         when (val r = repo.children(tokenProvider(), parentId)) {
             is Result.Success -> {
+                val fixed = r.data.map { it.copy(icon = fullIcon(it.icon)) }
                 _ui.value = _ui.value.copy(
                     loadingChildrenFor = null,
-                    childrenByParent = _ui.value.childrenByParent + (parentId to r.data)
+                    childrenByParent = _ui.value.childrenByParent + (parentId to fixed)
                 )
             }
-            is Result.Error -> {
-                _ui.value = _ui.value.copy(loadingChildrenFor = null, error = r.message)
-            }
+            is Result.Error -> _ui.value = _ui.value.copy(loadingChildrenFor = null, error = r.message)
         }
     }
 

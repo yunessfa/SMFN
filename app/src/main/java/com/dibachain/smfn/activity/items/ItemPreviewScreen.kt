@@ -14,10 +14,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.dibachain.smfn.R
 import com.dibachain.smfn.activity.feature.product.ProductPayload
+import com.dibachain.smfn.data.CategoryUi
 import com.dibachain.smfn.ui.components.AppSnackbarHost
 import com.dibachain.smfn.ui.components.showAppToast
 import kotlinx.coroutines.launch
@@ -26,7 +32,7 @@ import kotlinx.coroutines.launch
 fun ItemPublishPreviewScreen(
     payload: ProductPayload,
     onBack: () -> Unit,
-    onPublishSuccess: (createdId: String?) -> Unit,  // بعد از موفقیت، مسیر بعدی
+    onPublishSuccess: (createdId: String) -> Unit,  // بعد از موفقیت، مسیر بعدی
     onEdit: () -> Unit,
     tokenProvider: () -> String,                      // توکن
     countryProvider: () -> String ={ payload.location },           // اگر جدا داری از LocationsField
@@ -153,7 +159,16 @@ fun ItemPublishPreviewScreen(
                         onClick = onEdit,
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                         enabled = !ui.loading
-                    ) { Text("Edit") }
+                    ) { Text(
+                        text = "Edit",
+                        style = TextStyle(
+                            fontSize = 16.sp,
+                            lineHeight = 22.4.sp,
+                            fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                            fontWeight = FontWeight(400),
+                            color = Color(0xFF000000),
+                        )
+                    ) }
 
                     Spacer(Modifier.height(12.dp))
                 }
@@ -226,9 +241,10 @@ private fun ItemDetailContentNoTabs(
         SectionTitle("Value")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                painterResource(R.drawable.ic_camera_items),
+                painterResource(R.drawable.ic_money),
                 contentDescription = null,
-                tint = Color(0xFF292D32)
+                modifier = Modifier.size(18.dp),
+                tint = Color(0xFF000000)
             )
             Spacer(Modifier.width(6.dp))
             Text(
@@ -239,18 +255,27 @@ private fun ItemDetailContentNoTabs(
 
         Spacer(Modifier.height(18.dp))
 
-        SectionTitle("Category")
-        // اگر چیپ داری، اینجا نمایش بده
-        // FlowChips(items = categories)
+//        SectionTitle("Category")
+//        // اگر چیپ داری، اینجا نمایش بده
+//         FlowChips(items = categories)
 
         Spacer(Modifier.height(18.dp))
 
         SectionTitle("Location")
         Column {
-            Text(
-                location,
-                style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32))
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painterResource(R.drawable.ic_location_preview),
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFF000000)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    location,
+                    style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF292D32))
+                )
+            }
             Text(
                 "(0)Km from you",
                 style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFAAAAAA))
@@ -266,14 +291,3 @@ private fun ItemDetailContentNoTabs(
         )
     }
 }
-
-/* --- کمک‌کننده‌های ساده‌ی تایپوگرافی؛ اگر جای دیگه داری، حذف کن --- */
-//@Composable
-//private fun SectionTitle(text: String) {
-//    Text(text, style = MaterialTheme.typography.titleMedium.copy(color = Color(0xFF8C8C8C)))
-//}
-//
-//@Composable
-//private fun BodyText(text: String) {
-//    Text(text, style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF292D32)))
-//}

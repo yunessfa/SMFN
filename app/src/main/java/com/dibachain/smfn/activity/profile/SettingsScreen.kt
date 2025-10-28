@@ -40,8 +40,8 @@ fun SettingsScreen(
     onContactWhatsapp: () -> Unit,
     onHelpCenter: () -> Unit,
     onAbout: () -> Unit,
-    onLogout: () -> Unit,                 // فقط خروج از اکانت
-    onClearAppDataAndLogout: () -> Unit   // خروج + پاک‌سازی کامل
+    onLogout: () -> Unit,
+    onClearAppDataAndLogout: () -> Unit
 ) {
     var showLogoutSheet by remember { mutableStateOf(false) }
     var alsoClearData by remember { mutableStateOf(false) }
@@ -51,7 +51,7 @@ fun SettingsScreen(
             onDismissRequest = { showLogoutSheet = false },
             dragHandle = {},
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            containerColor = Color.White
+            containerColor = Color.White    // شییت سفید
         ) {
             LogoutSheet(
                 checked = alsoClearData,
@@ -66,13 +66,14 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        containerColor = Color.White,       // ← پس‌زمینه‌ی خود اسکیفولد سفید
         topBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .height(80.dp)
                     .padding(horizontal = 16.dp)
-                    .padding(top = 32.dp, bottom = 10.dp),
+                    .padding(top = 64.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -82,21 +83,9 @@ fun SettingsScreen(
                         .size(36.dp)
                         .clip(RoundedCornerShape(18.dp))
                 ) {
-                    Icon(
-                        painterResource(R.drawable.ic_swap_back),
-                        null,
-                        tint = Color(0xFF292D32)
-                    )
+                    Icon(painterResource(R.drawable.ic_swap_back), null, tint = Color(0xFF292D32))
                 }
-                Text(
-                    "",
-                    style = TextStyle(
-                        fontSize = 24.sp,
-                        fontFamily = inter,
-                        fontWeight = FontWeight(400),
-                        color = Color(0xFF292D32)
-                    )
-                )
+                Text("", style = TextStyle(fontSize = 24.sp, fontFamily = inter, fontWeight = FontWeight(400), color = Color(0xFF292D32)))
                 Box(Modifier.size(36.dp))
             }
         }
@@ -104,6 +93,7 @@ fun SettingsScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                .background(Color.White)     // ← بدنه‌ی صفحه هم سفید
                 .padding(inner)
                 .padding(horizontal = 16.dp)
         ) {
@@ -113,40 +103,29 @@ fun SettingsScreen(
                 style = TextStyle(
                     fontSize = 32.sp,
                     lineHeight = 33.3.sp,
-                    fontFamily = FontFamily(Font(R.font.inter_regular)),
+                    fontFamily = inter,
                     fontWeight = FontWeight(400),
                     color = Color(0xFF292D32),
                 )
             )
+
             Spacer(Modifier.height(20.dp))
             Text(
                 text = "App setting",
                 style = TextStyle(
                     fontSize = 16.sp,
                     lineHeight = 21.sp,
-                    fontFamily = FontFamily(Font(R.font.inter_regular)),
+                    fontFamily = inter,
                     fontWeight = FontWeight(400),
                     color = Color(0xFFAEB0B6),
                 )
             )
+
             Spacer(Modifier.height(17.dp))
-            // کارت اول
             SectionCard {
-                SettingRow(
-                    icon = R.drawable.ic_edit_profile,
-                    title = "Edit profile",
-                    onClick = onEditProfile
-                )
-                SettingRow(
-                    icon = R.drawable.ic_privacy_shield,
-                    title = "Privacy and safety",
-                    onClick = onPrivacyAndSafety
-                )
-                SettingRow(
-                    icon = R.drawable.ic_notification_bell,
-                    title = "Notification",
-                    onClick = onNotification
-                )
+                SettingRow(R.drawable.ic_edit_profile, "Edit profile", onClick = onEditProfile)
+                SettingRow(R.drawable.ic_privacy_shield, "Privacy and safety", onClick = onPrivacyAndSafety)
+                SettingRow(R.drawable.ic_notification_bell, "Notification", onClick = onNotification)
             }
 
             Spacer(Modifier.height(16.dp))
@@ -155,77 +134,41 @@ fun SettingsScreen(
                 style = TextStyle(
                     fontSize = 16.sp,
                     lineHeight = 21.sp,
-                    fontFamily = FontFamily(Font(R.font.inter_regular)),
+                    fontFamily = inter,
                     fontWeight = FontWeight(400),
                     color = Color(0xFFAEB0B6),
                 )
             )
             Spacer(Modifier.height(11.dp))
-            // کارت دوم
+
             SectionCard {
-                SettingRow(
-                    icon = R.drawable.ic_invite_friends,
-                    title = "invite friends",
-                    onClick = onInviteFriends
-                )
-                SettingRow(
-                    icon = R.drawable.ic_whatsapp,
-                    title = "Contact us on WhatsApp",
-                    onClick = onContactWhatsapp
-                )
-                SettingRow(
-                    icon = R.drawable.ic_help_center,
-                    title = "Help Center",
-                    subtitle = "Contact us, FAQ",
-                    onClick = onHelpCenter
-                )
-                SettingRow(
-                    icon = R.drawable.ic_info_about,
-                    title = "About",
-                    onClick = onAbout
-                )
-                Surface(
-                    onClick = { showLogoutSheet = true },
-                    color = Color.White,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                SettingRow(R.drawable.ic_invite_friends, "invite friends", onClick = onInviteFriends)
+                SettingRow(R.drawable.ic_whatsapp, "Contact us on WhatsApp", onClick = onContactWhatsapp)
+                SettingRow(R.drawable.ic_help_center, "Help Center", subtitle = "Contact us, FAQ", onClick = onHelpCenter)
+                SettingRow(R.drawable.ic_info_about, "About", onClick = onAbout)
+
+                // Logout (قرمز)
+                Surface(onClick = { showLogoutSheet = true }, color = Color.White, modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 13.dp, vertical = 14.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier
-                                .size(27.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.ic_logout),
-                                contentDescription = null,
-                                tint = Color(0xFFE21D20)
-                            )
-                        }
+                        Icon(painterResource(R.drawable.ic_logout), null, tint = Color(0xFFE21D20), modifier = Modifier.size(27.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
                             text = "Logout",
-                            style = TextStyle(
-                                fontSize = 18.sp,
-                                lineHeight = 21.sp,
-                                fontFamily = FontFamily(Font(R.font.inter_regular)),
-                                fontWeight = FontWeight(400),
-                                color = Color(0xFFE21D20),
-                            )
+                            style = TextStyle(fontSize = 18.sp, lineHeight = 21.sp, fontFamily = inter, fontWeight = FontWeight(400), color = Color(0xFFE21D20))
                         )
                     }
                 }
             }
 
             Spacer(Modifier.height(12.dp))
-
         }
     }
 }
+
+
 
 /* ----------------- اجزای UI ----------------- */
 

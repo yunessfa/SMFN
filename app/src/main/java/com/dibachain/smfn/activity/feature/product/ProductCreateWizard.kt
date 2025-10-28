@@ -268,6 +268,7 @@ fun ProductCreateWizard(
     }
     // ---------- Scaffold با دکمه‌ی ثابت پایین ----------
     Scaffold(
+
         bottomBar = {
             // نوار پایین ثابت
             Column(
@@ -719,11 +720,20 @@ private fun ConditionSheet(
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true   // ✅ حالت نیمه‌ باز رو رد کن
+    )
+
+    LaunchedEffect(Unit) {
+        sheetState.expand()            // ✅ فوراً تمام‌قد باز بشه
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.White,                      // نیمه‌شفاف
+        sheetState = sheetState,       // ✅ حتماً پاس بده
+        containerColor = Color.White,
         tonalElevation = 0.dp,
-        contentWindowInsets = { WindowInsets(0) }  // حاشیه اضافه نیاد
+        contentWindowInsets = { WindowInsets(0) } // اوکیه
     ) {
         ConditionSheetBody(
             selected = selected,
@@ -732,6 +742,7 @@ private fun ConditionSheet(
         )
     }
 }
+
 
 @OptIn(ExperimentalLayoutApi::class)
 
@@ -821,7 +832,9 @@ private fun ConditionSheetBody(
         Column(
             verticalArrangement = Arrangement.SpaceAround,
             modifier = Modifier
-            .height(392.dp)
+                .fillMaxWidth()
+                .weight(1f, fill = false)           // اجازه بده قد محتوا طبیعی باشه
+                .verticalScroll(rememberScrollState())
             .background(color = Color(0xFFF7F7F7), shape = RoundedCornerShape(size = 20.dp))) {
             items.forEach { (t, sub) ->
                 val on = selected == t
@@ -1202,7 +1215,7 @@ private fun StepKycVideoBackCamera(
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(266f / 318f)
+                .aspectRatio(266f / 250f)
 //                .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFFF9F9FB)),
@@ -1460,157 +1473,157 @@ fun GradientText(text: String, fontSize: Int, weight: FontWeight = FontWeight.Se
     Text(text, style = TextStyle(brush = Brush.linearGradient(ActiveGradient), fontSize = fontSize.sp, fontWeight = weight))
 }
 
-@Composable
-fun StepCategoriesExact(
-    selected: MutableSet<String>,
-    onGetPremiumClick: () -> Unit = {},
-    onSelectionChanged: (Set<String>) -> Unit
-) {
-    val cats = remember {
-        listOf(
-            Cat("home", "Home & Kitchen", children = listOf(
-                Sub("home_small", "Small Appliances", R.drawable.home_placeholder),
-                Sub("home_clean", "Cleaning", R.drawable.home_placeholder),
-            )),
-            Cat("fashion", "Fashion", children = listOf(
-                Sub("fashion_men", "Men", R.drawable.home_placeholder),
-                Sub("fashion_women", "Women", R.drawable.home_placeholder),
-            )),
-            Cat("electronics", "Electronics", children = listOf(
-                Sub("elc_phone", "Phones & Tablets", R.drawable.home_placeholder),
-                Sub("elc_pc", "Computers & Laptops", R.drawable.home_placeholder),
-                Sub("elc_gaming", "Gaming", R.drawable.home_placeholder),
-            )),
-            Cat("luxury", "Luxury", isPremium = true, children = emptyList())
-        )
-    }
-    var expandedKey by remember { mutableStateOf<String?>(null) }
-    fun toggleSub(k: String) { if (selected.contains(k)) selected.remove(k) else selected.add(k); onSelectionChanged(selected) }
+//@Composable
+//fun StepCategoriesExact(
+//    selected: MutableSet<String>,
+//    onGetPremiumClick: () -> Unit = {},
+//    onSelectionChanged: (Set<String>) -> Unit
+//) {
+//    val cats = remember {
+//        listOf(
+//            Cat("home", "Home & Kitchen", children = listOf(
+//                Sub("home_small", "Small Appliances", R.drawable.home_placeholder),
+//                Sub("home_clean", "Cleaning", R.drawable.home_placeholder),
+//            )),
+//            Cat("fashion", "Fashion", children = listOf(
+//                Sub("fashion_men", "Men", R.drawable.home_placeholder),
+//                Sub("fashion_women", "Women", R.drawable.home_placeholder),
+//            )),
+//            Cat("electronics", "Electronics", children = listOf(
+//                Sub("elc_phone", "Phones & Tablets", R.drawable.home_placeholder),
+//                Sub("elc_pc", "Computers & Laptops", R.drawable.home_placeholder),
+//                Sub("elc_gaming", "Gaming", R.drawable.home_placeholder),
+//            )),
+//            Cat("luxury", "Luxury", isPremium = true, children = emptyList())
+//        )
+//    }
+//    var expandedKey by remember { mutableStateOf<String?>(null) }
+//    fun toggleSub(k: String) { if (selected.contains(k)) selected.remove(k) else selected.add(k); onSelectionChanged(selected) }
+//
+//    Column(
+//        modifier = Modifier
+//            .fillMaxWidth()
+//            .clip(RoundedCornerShape(16.dp))
+//            .border(BorderStroke(1.dp, Color(0xFFECECEC)), RoundedCornerShape(16.dp))
+//            .background(Color.White)
+//            .padding(vertical = 6.dp)
+//    ) {
+//        cats.forEach { cat ->
+//            val hasAnySelected = cat.children.any { it.key in selected }
+//            val isExpanded = expandedKey == cat.key
+//            Row(
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(48.dp)
+//                    .clickable { expandedKey = if (isExpanded) null else cat.key }
+//                    .padding(horizontal = 16.dp),
+//                verticalAlignment = Alignment.CenterVertically
+//            ) {
+//                val iconMod = if (!cat.isPremium && hasAnySelected) Modifier.gradientTint() else Modifier
+//                Icon(
+//                    painter = painterResource(if (cat.isPremium) R.drawable.ic_luxury else R.drawable.home_placeholder),
+//                    contentDescription = cat.title,
+//                    tint = when {
+//                        cat.isPremium -> Gold
+//                        hasAnySelected -> Color.Unspecified
+//                        else -> Inactive
+//                    },
+//                    modifier = Modifier.size(24.dp).then(iconMod)
+//                )
+//                Spacer(Modifier.width(12.dp))
+//                if (cat.isPremium) Text(cat.title,
+//                    style = TextStyle(
+//                        fontSize = 16.sp,
+//                        lineHeight = 23.3.sp,
+//                        fontFamily = FontFamily(Font(R.font.inter_medium)),
+//                        fontWeight = FontWeight(500),
+//                        color = Color(0xFFE4A70A),
+//                    )
+//                    , modifier = Modifier.weight(1f))
+//                else if (hasAnySelected) Box(Modifier.weight(1f)) { GradientText(cat.title, 16) }
+//                else Text(cat.title,
+//                    style = TextStyle(
+//                        fontSize = 16.sp,
+//                        lineHeight = 23.3.sp,
+//                        fontFamily = FontFamily(Font(R.font.inter_medium)),
+//                        fontWeight = FontWeight(500),
+//                        color = Color(0xFF000000),
+//                    )
+//                    , modifier = Modifier.weight(1f))
+//                val rot = if (isExpanded) 90f else 0f
+//                Icon(painterResource(R.drawable.arrow_right), contentDescription = null, tint = Inactive.copy(alpha = .6f),
+//                    modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = rot })
+//            }
+//            AnimatedVisibility(visible = isExpanded) {
+//                if (!cat.isPremium) {
+//                    Column(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(start = 48.dp, end = 12.dp, bottom = 10.dp)
+//                    ) {
+//                        cat.children.forEach { sub ->
+//                            val on = sub.key in selected
+//                            Row(
+//                                modifier = Modifier
+//                                    .fillMaxWidth()
+//                                    .clickable { toggleSub(sub.key) }
+//                                    .padding(vertical = 10.dp),
+//                                verticalAlignment = Alignment.CenterVertically
+//                            ) {
+//                                val iconMod = if (on) Modifier.gradientTint() else Modifier
+//                                Icon(painterResource(sub.icon), contentDescription = sub.title,
+//                                    tint = if (on) Color.Unspecified else Inactive.copy(alpha = .75f),
+//                                    modifier = Modifier.size(18.dp).then(iconMod))
+//                                Spacer(Modifier.width(10.dp))
+//                                if (on) GradientText(sub.title, 15, FontWeight.Medium) else Text(sub.title, color = Inactive, fontSize = 15.sp)
+//                            }
+//                        }
+//                    }
+//                } else {
+//                    Box(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(horizontal = 20.dp, vertical = 10.dp),
+//                        contentAlignment = Alignment.Center
+//                    ) {
+//                        PremiumOutlineButton(
+//                            text = "Get SMFN Premium",
+//                            iconRes = R.drawable.logo_crop,
+//                            onClick = { onGetPremiumClick() },
+//                            modifier = Modifier.fillMaxWidth()
+//                        )
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .border(BorderStroke(1.dp, Color(0xFFECECEC)), RoundedCornerShape(16.dp))
-            .background(Color.White)
-            .padding(vertical = 6.dp)
-    ) {
-        cats.forEach { cat ->
-            val hasAnySelected = cat.children.any { it.key in selected }
-            val isExpanded = expandedKey == cat.key
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clickable { expandedKey = if (isExpanded) null else cat.key }
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val iconMod = if (!cat.isPremium && hasAnySelected) Modifier.gradientTint() else Modifier
-                Icon(
-                    painter = painterResource(if (cat.isPremium) R.drawable.ic_luxury else R.drawable.home_placeholder),
-                    contentDescription = cat.title,
-                    tint = when {
-                        cat.isPremium -> Gold
-                        hasAnySelected -> Color.Unspecified
-                        else -> Inactive
-                    },
-                    modifier = Modifier.size(24.dp).then(iconMod)
-                )
-                Spacer(Modifier.width(12.dp))
-                if (cat.isPremium) Text(cat.title,
-                    style = TextStyle(
-                        fontSize = 16.sp,
-                        lineHeight = 23.3.sp,
-                        fontFamily = FontFamily(Font(R.font.inter_medium)),
-                        fontWeight = FontWeight(500),
-                        color = Color(0xFFE4A70A),
-                    )
-                    , modifier = Modifier.weight(1f))
-                else if (hasAnySelected) Box(Modifier.weight(1f)) { GradientText(cat.title, 16) }
-                else Text(cat.title,
-                    style = TextStyle(
-                        fontSize = 16.sp,
-                        lineHeight = 23.3.sp,
-                        fontFamily = FontFamily(Font(R.font.inter_medium)),
-                        fontWeight = FontWeight(500),
-                        color = Color(0xFF000000),
-                    )
-                    , modifier = Modifier.weight(1f))
-                val rot = if (isExpanded) 90f else 0f
-                Icon(painterResource(R.drawable.arrow_right), contentDescription = null, tint = Inactive.copy(alpha = .6f),
-                    modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = rot })
-            }
-            AnimatedVisibility(visible = isExpanded) {
-                if (!cat.isPremium) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 48.dp, end = 12.dp, bottom = 10.dp)
-                    ) {
-                        cat.children.forEach { sub ->
-                            val on = sub.key in selected
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { toggleSub(sub.key) }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val iconMod = if (on) Modifier.gradientTint() else Modifier
-                                Icon(painterResource(sub.icon), contentDescription = sub.title,
-                                    tint = if (on) Color.Unspecified else Inactive.copy(alpha = .75f),
-                                    modifier = Modifier.size(18.dp).then(iconMod))
-                                Spacer(Modifier.width(10.dp))
-                                if (on) GradientText(sub.title, 15, FontWeight.Medium) else Text(sub.title, color = Inactive, fontSize = 15.sp)
-                            }
-                        }
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PremiumOutlineButton(
-                            text = "Get SMFN Premium",
-                            iconRes = R.drawable.logo_crop,
-                            onClick = { onGetPremiumClick() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PremiumOutlineButton(
-    text: String,
-    iconRes: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(28.dp)
-    Box(
-        modifier = modifier
-            .height(52.dp)
-            .clip(shape)
-            .border(width = 1.dp, brush = Brush.linearGradient(Gradient), shape = shape)
-            .background(Color.White, shape)
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            Icon(painterResource(iconRes), null, modifier = Modifier.size(24.dp), tint = Color.Unspecified)
-            Spacer(Modifier.width(10.dp))
-            Text(text, style = TextStyle(brush = Brush.linearGradient(Gradient)))
-        }
-    }
-}
+//@Composable
+//private fun PremiumOutlineButton(
+//    text: String,
+//    iconRes: Int,
+//    onClick: () -> Unit,
+//    modifier: Modifier = Modifier,
+//) {
+//    val shape = RoundedCornerShape(28.dp)
+//    Box(
+//        modifier = modifier
+//            .height(52.dp)
+//            .clip(shape)
+//            .border(width = 1.dp, brush = Brush.linearGradient(Gradient), shape = shape)
+//            .background(Color.White, shape)
+//            .clickable { onClick() },
+//        contentAlignment = Alignment.Center
+//    ) {
+//        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+//            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+//            Icon(painterResource(iconRes), null, modifier = Modifier.size(24.dp), tint = Color.Unspecified)
+//            Spacer(Modifier.width(10.dp))
+//            Text(text, style = TextStyle(brush = Brush.linearGradient(Gradient)))
+//        }
+//    }
+//}
 //@perviewScreen(showBackground = true, widthDp = 390)
 //@Composable
 //fun Step1_Categories_Preview() {
@@ -1657,21 +1670,21 @@ private fun PremiumOutlineButton(
 //    )
 //}
 //
-@perviewScreen(showBackground = true, widthDp = 390, heightDp = 800)
-@Composable
-fun Step5_TagsValue_Preview() {
-    StepTagsAndValue(
-        tags = listOf("camera", "mirrorless"),
-        tagInput = "",
-        onTagInput = {},
-        onAddTag = {},
-        onRemoveTag = {},
-        currency = "AED",
-        valueText = "1200",
-        onValue = {}
-    )
-}
-//
+//@perviewScreen(showBackground = true, widthDp = 390, heightDp = 800)
+//@Composable
+//fun Step5_TagsValue_Preview() {
+//    StepTagsAndValue(
+//        tags = listOf("camera", "mirrorless"),
+//        tagInput = "",
+//        onTagInput = {},
+//        onAddTag = {},
+//        onRemoveTag = {},
+//        currency = "AED",
+//        valueText = "1200",
+//        onValue = {}
+//    )
+//}
+////
 //@perviewScreen(showBackground = true, widthDp = 390)
 //@Composable
 //fun Step6_Location_Preview() {

@@ -1,5 +1,14 @@
 package com.dibachain.smfn.activity.profile
 
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import coil.size.Scale
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -17,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -24,6 +34,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -33,29 +44,33 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.tooling.preview.Preview
 import com.dibachain.smfn.R
 import kotlinx.coroutines.delay
 
 /* ----------------- Data models ----------------- */
 
 data class ProfileStats(
-    val followers: Int,
-    val following: Int,
+    val followers: Int?,
+    val following: Int?,
     val swapped: Int
 )
 
 data class ItemCardUi(
-    val image: Painter?,
+    val imageUrl: String? = null,      // ← جدید: آدرس تصویر
+    val image: Painter? = null,        // قبلی
     val title: String,
-    val expiresLabel: String?,     // e.g. "Expires Sep 2026"
-    val categoryChip: String?      // e.g. "Photography"
+    val expiresLabel: String?,
+    val categoryChip: String?,
+    val id: String
 )
 
 data class CollectionCardUi(
-    val cover: Painter?,
-    val title: String
+    val coverUrl: String? = null,      // ← جدید: آدرس تصویر
+    val cover: Painter? = null,        // قبلی
+    val title: String,
+    val _id : String
 )
+
 
 /* ----------------- Screen ----------------- */
 
@@ -69,7 +84,7 @@ fun ProfileScreen(
     onSettings: () -> Unit = {},
     onRowFollow: () -> Unit = {},
     onRightAction: () -> Unit = {},
-
+    avatarUrl: String? = null,   // ← جدید: اگر URL بدهی، شیمِر میاد
     // profile block
     avatar: Painter?,
     name: String,
@@ -87,32 +102,34 @@ fun ProfileScreen(
     rightActiveIcon: Painter? = null, // 👈 آیکن فعال (اختیاری)
     initialSegment: Int = 0,          // 0: Items, 1: Favorites
     onSegmentChange: (Int) -> Unit = {},
-
+    isFollowLoading: Boolean = false,
     // tabs under Items
     allItems: List<ItemCardUi>,
     collections: List<CollectionCardUi>,
     onAddCollection: () -> Unit = {},
     onItemClick: (ItemCardUi) -> Unit = {},
-    onCollectionClick: (CollectionCardUi) -> Unit = {},
+    onCollectionClick: (String) -> Unit = {},
     showPremiumTipInitially: Boolean = true,
     showResetTipInitially: Boolean = false,
     autoDismissMillis: Long = 10_000,
     onTipsAcknowledged: (premiumSeen: Boolean, resetSeen: Boolean) -> Unit = { _, _ -> },
-     editIcon: Painter? = null,
+    editIcon: Painter? = null,
     deleteIcon: Painter? = null,
     trashIcon: Painter? = null,
     onEditItem: (ItemCardUi) -> Unit = {},
     onDeleteConfirmed: (ItemCardUi) -> Unit = {},
-
     favoriteItems: List<ItemCardUi>,
     isOwner: Boolean = true,
     isFollowingInitial: Boolean = false,
+    isPremium: Boolean = false,
     chatIcon: Painter? = null,
     onFollowToggle: (Boolean) -> Unit = {},
     onChatClick: () -> Unit = {},
+    deleteLoading: Boolean = false,
+    deleteErrorText: String? = null,
 ) {
     var segment by rememberSaveable { mutableIntStateOf(initialSegment) }
-    var itemsTabIndex by rememberSaveable { mutableIntStateOf(1) } // 0: All, 1: Collection
+    var itemsTabIndex by rememberSaveable { mutableIntStateOf(0) } // 0: All, 1: Collection
     var showItemActions by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     var selectedItem by remember { mutableStateOf<ItemCardUi?>(null) }
@@ -128,6 +145,7 @@ fun ProfileScreen(
     ) {
         item {
             ProfileHeader(
+                avatarUrl = avatarUrl,   // ← پاس بده
                 gradient = gradient,
                 settingsIcon = settingsIcon,
                 rightActionIcon = rightActionIcon,
@@ -161,6 +179,9 @@ fun ProfileScreen(
                 chatIcon = chatIcon,
                 onFollowToggle = onFollowToggle,
                 onChatClick = onChatClick,
+                isPremium=isPremium,
+                isFollowLoading = isFollowLoading /* این را از Route پاس می‌دهیم */
+
             )
         }
 
@@ -183,7 +204,10 @@ fun ProfileScreen(
                             data = itCard,
                             moreIcon = painterResource(R.drawable.ic_more_profile),
                             onClick = { onItemClick(itCard) },
-                            onMoreClick = {showItemActions=true},
+                            onMoreClick = {
+                                selectedItem = itCard           // 👈 یادت نره انتخاب آیتم
+                                showItemActions=true
+                                          },
                             modifier = Modifier
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                                 .fillMaxWidth()
@@ -201,27 +225,28 @@ fun ProfileScreen(
                     ) { c ->
                         CollectionCard(
                             data = c,
-                            onClick = { onCollectionClick(c) }
+                            onClick = { onCollectionClick(c._id) }
                         )
                     }
                     // کارت Add Collection
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            AddCollectionCard(
-                                plusIcon = painterResource(R.drawable.ic_add_circle), // آیکن را خودت پاس بده
-                                onClick = onAddCollection,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(Modifier.weight(1f))
+                    if (isOwner) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                AddCollectionCard(
+                                    plusIcon = painterResource(R.drawable.ic_add_circle),
+                                    onClick = onAddCollection,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.weight(1f))
+                            }
                         }
                     }
-                    item { Spacer(Modifier.height(80.dp)) }
-                }
+                    }
             }
         } else {
             // Favorites (گرید بدون Nested Scroll)
@@ -280,13 +305,15 @@ fun ProfileScreen(
 // --- Delete Confirm Sheet ---
     if (showDeleteConfirm) {
         ModalBottomSheet(
-            onDismissRequest = { showDeleteConfirm = false },
+            onDismissRequest = { if (!deleteLoading) showDeleteConfirm = false },
             sheetState = deleteSheetState,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             containerColor = Color.White
         ) {
             DeleteConfirmSheet(
                 trashIcon = trashIcon,
+                isLoading = deleteLoading,
+                errorText = deleteErrorText,
                 onCancel = { showDeleteConfirm = false },
                 onConfirm = {
                     val it = selectedItem ?: return@DeleteConfirmSheet
@@ -299,11 +326,97 @@ fun ProfileScreen(
 
 }
 
+
+@Composable
+fun ShimmerBox(
+    modifier: Modifier = Modifier,
+    corner: Dp = 16.dp
+) {
+    // شیمِر سبکِ خطی
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val x by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween (1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer-x"
+    )
+
+    val base = Color(0xFFEDEDED)
+    val highlight = Color(0xFFF7F7F7)
+    val brush = Brush.linearGradient(
+        colors = listOf(base, highlight, base),
+        start = Offset.Zero,
+        end = Offset(600f * x + 200f, 0f)
+    )
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(corner))
+            .background(brush)
+    )
+}
+
+
+@Composable
+fun NetworkImageWithShimmer(
+    url: String?,
+    modifier: Modifier = Modifier,
+    corner: Dp = 16.dp,
+    contentScale: ContentScale = ContentScale.Crop,
+    // اختیاری: تصویر خطا
+    errorPainter: Painter? = null,
+) {
+    val ctx = LocalContext.current
+    SubcomposeAsyncImage(
+        model = ImageRequest.Builder(ctx)
+            .data(url)
+            .crossfade(true)             // کراس‌فید نرم
+            .scale(Scale.FILL)           // تناسب پرکن
+            // مهم: هیچ placeholder تصویری نذار
+            .build(),
+        contentDescription = null,
+        modifier = modifier
+            .clip(RoundedCornerShape(corner)), // گوشه‌گرد یکسان با شیمِر
+        contentScale = contentScale,
+        loading = {
+            ShimmerBox(
+                modifier = Modifier
+                    .matchParentSize(),
+                corner = corner
+            )
+        },
+        error = {
+            // انتخابی: اگر دوست داری بجای چیزی سفید، آیکن/عکس خطا نشون بده
+            if (errorPainter != null) {
+                Image(
+                    painter = errorPainter,
+                    contentDescription = null,
+                    modifier = Modifier.matchParentSize(),
+                    contentScale = contentScale
+                )
+            } else {
+                // یا یک باکس خنثی
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .background(Color(0xFFEFEFEF))
+                )
+            }
+        }
+    )
+}
+
+
 /* ----------------- Header ----------------- */
 
 @Composable
 private fun ProfileHeader(
     gradient: Brush,
+     isFollowLoading: Boolean,   // NEW
+avatarUrl: String? = null,   // ← جدید
     settingsIcon: Painter?,
     rightActionIcon: Painter?,
     onSettings: () -> Unit,
@@ -325,6 +438,7 @@ private fun ProfileHeader(
     onSegmentChange: (Int) -> Unit,
     // --- پارامترهای جدید برای نمایش خودکارِ یک‌بار ---
     showPremiumTipInitially: Boolean,
+    isPremium: Boolean,
     showResetTipInitially: Boolean,
     autoDismissMillis: Long,
     onTipsAcknowledged: (Boolean, Boolean) -> Unit = { _, _ -> },
@@ -422,8 +536,35 @@ private fun ProfileHeader(
                         .background(Color(0xFFEFEFEF)),
                     contentAlignment = Alignment.Center
                 ) {
-                    avatar?.let { Image(it, null, Modifier.matchParentSize()) }
-                }
+                    when {
+                        !avatarUrl.isNullOrBlank() -> {
+                            NetworkImageWithShimmer(
+                                url = avatarUrl,
+                                modifier = Modifier.matchParentSize(),
+                                corner = 48.dp, // دایره؛ گوشه زیاد مشکلی ایجاد نمی‌کند چون clip(Circle) شده
+                                contentScale = ContentScale.Crop,
+                                errorPainter = painterResource(R.drawable.ic_avatar)
+                            )
+                        }
+                        avatar != null -> {
+                            Image(
+                                painter = avatar,
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        else -> {
+                            Image(
+                                painter = painterResource(R.drawable.ic_avatar),
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+            }
+
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Row(
@@ -445,25 +586,28 @@ private fun ProfileHeader(
                             Row {
                                 Spacer(Modifier.width(6.dp))
                                 verifiedIcon?.let {
-                                    Image(
-                                        it, null,
-                                        Modifier
-                                            .size(18.dp)
-                                            .clickable {
-                                                showPremiumBadge = true
-                                            } // باز کردن بادج اول
-                                    )
+                                    if(isPremium==true) null else Color(0xFFE21D20)?.let { modifier ->
+                                        Icon(
+                                            it, null,
+                                            tint =modifier,
+                                            modifier =Modifier
+                                                .size(18.dp)
+                                                .clickable {
+                                                    showPremiumBadge = true
+                                                },
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.width(4.dp))
-                                verifiedIcon1?.let {
-                                    Icon(
-                                        it, null,
-                                        tint = Color(0xFFE21D20),
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .clickable { showResetBadge = true } // بادج دوم
-                                    )
-                                }
+//                                verifiedIcon1?.let {
+//                                    Icon(
+//                                        it, null,
+//                                        tint = Color(0xFFE21D20),
+//                                        modifier = Modifier
+//                                            .size(18.dp)
+//                                            .clickable { showResetBadge = true } // بادج دوم
+//                                    )
+//                                }
                             }
                         }
                         Spacer(Modifier.width(10.dp))
@@ -518,10 +662,14 @@ private fun ProfileHeader(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     FollowButton(
+
+                        loading = isFollowLoading,
                         following = isFollowing,
                         onClick = {
-                            isFollowing = !isFollowing
-                            onFollowToggle(isFollowing)
+                            if (!isFollowLoading) { // جلوگیری از کلیک در حال لود
+                                isFollowing = !isFollowing
+                                onFollowToggle(isFollowing)
+                            }
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -575,51 +723,72 @@ private fun ProfileHeader(
     }
 }
 @Composable
-private fun FollowButton(following: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun FollowButton(
+    following: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    loading: Boolean = false // NEW
+) {
     val pill = RoundedCornerShape(24.dp)
     if (following) {
-        // Outline “Following”
         OutlinedButton(
             onClick = onClick,
+            enabled = !loading,
             shape = pill,
             border = BorderStroke(1.dp, Color(0xFF1E1E1E)),
             colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent),
             modifier = modifier
         ) {
-            Text(
-                text = "Following",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 22.4.sp,
-                    fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-                    fontWeight = FontWeight(400),
-                    color = Color(0xFF000000),
+            if (loading) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                    color = Color(0xFF1E1E1E)
                 )
-            )
+            } else {
+                Text(
+                    text = "Following",
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 22.4.sp,
+                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                        fontWeight = FontWeight(400),
+                        color = Color(0xFF000000),
+                    )
+                )
+            }
         }
     } else {
-        // Gradient “Follow”
         val grad = Brush.horizontalGradient(listOf(Color(0xFFFFC753), Color(0xFF4AC0A8)))
         Box(
             modifier = modifier
                 .clip(pill)
                 .background(grad)
-                .clickable(onClick = onClick),
+                .clickable(enabled = !loading, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Follow",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 22.4.sp,
-                    fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-                    fontWeight = FontWeight(400),
-                    color = Color(0xFFFFFFFF),
+            if (loading) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                    color = Color.White
                 )
-            )
+            } else {
+                Text(
+                    text = "Follow",
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 22.4.sp,
+                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                        fontWeight = FontWeight(400),
+                        color = Color(0xFFFFFFFF),
+                    )
+                )
+            }
         }
     }
 }
+
 
 @Composable
 private fun ChatButton(icon: Painter?, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -678,6 +847,8 @@ private fun ItemActionsSheet(
 @Composable
 private fun DeleteConfirmSheet(
     trashIcon: Painter?,
+    isLoading: Boolean,              // NEW
+    errorText: String?,              // NEW
     onCancel: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -690,7 +861,6 @@ private fun DeleteConfirmSheet(
             .padding(horizontal = 34.dp, vertical = 35.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // آیکن بزرگ
         Box(
             modifier = Modifier
                 .size(72.dp)
@@ -729,11 +899,22 @@ private fun DeleteConfirmSheet(
             modifier = Modifier.padding(horizontal = 8.dp)
         )
 
+        // NEW: پیام خطا
+        if (!errorText.isNullOrBlank()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                errorText,
+                color = Color(0xFFE21D20),
+                style = TextStyle(fontSize = 13.sp, fontFamily = FontFamily(Font(R.font.inter_medium))),
+                textAlign = TextAlign.Center
+            )
+        }
+
         Spacer(Modifier.height(16.dp))
 
-        // Cancel (خاکستری)
+        // Cancel
         Surface(
-            onClick = onCancel,
+            onClick = { if (!isLoading) onCancel() },   // غیرفعال در حالت لود
             shape = RoundedCornerShape(24.dp),
             color = Color(0xFFE6E6E6),
             modifier = Modifier
@@ -742,7 +923,7 @@ private fun DeleteConfirmSheet(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
-                    "Cancel",
+                    if (isLoading) "Please wait…" else "Cancel",
                     style = TextStyle(
                         fontSize = 16.sp,
                         fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
@@ -755,26 +936,30 @@ private fun DeleteConfirmSheet(
 
         Spacer(Modifier.height(18.dp))
 
-        // Delete (گرادیانی)
+        // Delete
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(grad)
-                .clickable(onClick = onConfirm),
+                .clickable(enabled = !isLoading, onClick = onConfirm),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                "Delete Item",
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 22.4.sp,
-                    fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-                    fontWeight = FontWeight(600),
-                    color = Color(0xFFFFFFFF),
+            if (isLoading) {
+                CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White, modifier = Modifier.size(20.dp))
+            } else {
+                Text(
+                    "Delete Item",
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 22.4.sp,
+                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                        fontWeight = FontWeight(600),
+                        color = Color(0xFFFFFFFF),
                     )
-            )
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -972,16 +1157,21 @@ private fun ArrowDown(color: Color, modifier: Modifier = Modifier) {
 
 @Composable
 private fun CircleIcon(icon: Painter?, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        icon?.let { Image(it, null, Modifier.size(24.dp)) }
+    if (icon == null) {
+        Spacer(Modifier.size(36.dp)) // بدون clickable
+    } else {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(icon, null, Modifier.size(24.dp))
+        }
     }
 }
+
 
 /* ----------------- Segmented switch ----------------- */
 
@@ -1125,10 +1315,28 @@ fun LargeItemCard(
             .background(Color(0xFFEFEFEF))
             .clickable(onClick = onClick)
     ) {
-        data.image?.let { Image(it, null, Modifier.fillMaxSize()) }
+        when {
+            !data.imageUrl.isNullOrBlank() -> {
+                NetworkImageWithShimmer(
+                    url = data.imageUrl!!,
+                    modifier = Modifier.fillMaxSize(),
+                    corner = radius,
+                    contentScale = ContentScale.Crop,
+                    errorPainter = painterResource(R.drawable.ic_placeholder)
+                )
+            }
+            data.image != null -> {
+                Image(
+                    painter = data.image,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
 
-
-            // --- استایل “مالک” مثل اسکرین‌شات ---
+        if (isOwnerView) {
+            // برچسب مالک (مشکی نیمه‌شفاف)
             data.expiresLabel?.let {
                 Box(
                     modifier = Modifier
@@ -1149,7 +1357,6 @@ fun LargeItemCard(
                     )
                 }
             }
-        if (isOwnerView) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -1161,7 +1368,7 @@ fun LargeItemCard(
                 Image(painterResource(R.drawable.ic_more_profile), null, Modifier.size(18.dp))
             }
         } else {
-            // --- استایل قبلی تو (همان که داشتی) ---
+            // برچسب‌های حالت «غیر مالک»
             data.expiresLabel?.let {
                 LabelChip(
                     text = it,
@@ -1183,43 +1390,81 @@ fun LargeItemCard(
 }
 
 
+
 @Composable
 private fun SquareItemCard(
     data: ItemCardUi,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val radius = 18.dp
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(radius))
             .background(Color(0xFFEFEFEF))
             .clickable(onClick = onClick)
     ) {
-        data.image?.let { Image(it, null, Modifier.fillMaxSize()) }
+        when {
+            !data.imageUrl.isNullOrBlank() -> {
+                NetworkImageWithShimmer(
+                    url = data.imageUrl!!,
+                    modifier = Modifier.fillMaxSize(),
+                    corner = radius,
+                    contentScale = ContentScale.Crop,
+                    errorPainter = painterResource(R.drawable.ic_placeholder)
+                )
+            }
+            data.image != null -> {
+                Image(
+                    painter = data.image,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
     }
 }
+
 
 @Composable
 private fun CollectionCard(
     data: CollectionCardUi,
-    onClick: () -> Unit,
+    onClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val radius = 18.dp
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(radius))
             .background(Color(0xFFF4F4F4))
-            .clickable(onClick = onClick)
+            .clickable(onClick = { onClick(data._id) })
             .padding(0.dp)
     ) {
-        data.cover?.let { Image(
-            it, null, contentScale = ContentScale.FillBounds,
-            modifier =Modifier.fillMaxSize(),
-        ) }
+        when {
+            !data.coverUrl.isNullOrBlank() -> {
+                NetworkImageWithShimmer(
+                    url = data.coverUrl!!,
+                    modifier = Modifier.fillMaxSize(),
+                    corner = radius,
+                    contentScale = ContentScale.Crop,
+                    errorPainter = painterResource(R.drawable.ic_placeholder)
+                )
+            }
+            data.cover != null -> {
+                Image(
+                    painter = data.cover,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
     }
 }
+
 
 @Composable
 private fun AddCollectionCard(
@@ -1283,7 +1528,7 @@ private fun CategoryChip(text: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(headerShape)
-            .background(brush = Brush.linearGradient(listOf(Color(0xFFFFC753),Color(0xFF4AC0A8))))
+            .background(brush = Brush.linearGradient(listOf(Color(0xFFFFC753), Color(0xFF4AC0A8))))
             .padding(horizontal = 10.dp, vertical = 3.dp)
     ) {
         Text(text, style = TextStyle(

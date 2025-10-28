@@ -22,6 +22,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dibachain.smfn.R
+import com.dibachain.smfn.data.Repos
 
 /* ---------- Typography ---------- */
 private val inter = FontFamily(Font(R.font.inter_regular))
@@ -32,36 +33,58 @@ private val appGradient = Brush.horizontalGradient(listOf(Color(0xFFFFC753), Col
 /* ---------- Screen ---------- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivacyAndSafetyScreen(
+fun PrivacyAndSafetyRoute(
     onBack: () -> Unit,
-    initialSendMessage: Boolean,
-    initialShowFollows: Boolean,
-    showFollowsRow: Boolean = true,
-    onSendMessageChanged: (Boolean) -> Unit,
-    onShowFollowsChanged: (Boolean) -> Unit
+    tokenProvider: suspend () -> String,
+    showFollowsRow: Boolean = true
 ) {
-    var canSendMessage by remember { mutableStateOf(initialSendMessage) }
-    var showFollows by remember { mutableStateOf(initialShowFollows) }
+    val vm = remember { PrivacyViewModel(Repos.profileRepository, tokenProvider) }
+    val state by vm.state.collectAsState()
 
+    PrivacyAndSafetyScreen(
+        onBack = onBack,
+        sendMessage = state.sendMessage,
+        showFollows = state.showFollowerAndFollowing,
+        showFollowsRow = showFollowsRow,
+        onSendMessageChanged = vm::toggleSendMessage,
+        onShowFollowsChanged = vm::toggleShowFollows,
+        isLoading = state.isLoading,
+        error = state.error
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PrivacyAndSafetyScreen(
+    onBack: () -> Unit,
+    sendMessage: Boolean,
+    showFollows: Boolean,
+    showFollowsRow: Boolean,
+    onSendMessageChanged: (Boolean) -> Unit,
+    onShowFollowsChanged: (Boolean) -> Unit,
+    isLoading: Boolean,
+    error: String?
+) {
     Scaffold(
+        containerColor = Color.White,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 32.dp, bottom = 10.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(top = 64.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(18.dp))
+                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(18.dp))
                 ) {
                     Icon(
                         painterResource(R.drawable.ic_swap_back),
-                        null,
+                        contentDescription = "Back",
                         tint = Color(0xFF292D32)
                     )
                 }
@@ -73,48 +96,50 @@ fun PrivacyAndSafetyScreen(
         Column(
             Modifier
                 .fillMaxSize()
+                .background(Color.White)
                 .padding(inner)
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(Modifier.height(24.dp))
+            // فاصلهٔ معقول زیر تاپ‌بار
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "Privacy and safety",
                 style = TextStyle(
                     fontSize = 32.sp,
                     lineHeight = 33.3.sp,
                     fontFamily = inter,
-                    fontWeight = FontWeight(400),
+                    fontWeight = FontWeight.Normal,
                     color = Color(0xFF292D32)
                 )
             )
             Spacer(Modifier.height(16.dp))
 
-            // Card 1: Send message
             ToggleCard {
                 PrivacyToggleRow(
                     title = "Send message",
-                    checked = canSendMessage,
-                    onCheckedChange = {
-                        canSendMessage = it
-                        onSendMessageChanged(it)
-                    }
+                    checked = sendMessage,
+                    onCheckedChange = onSendMessageChanged
                 )
             }
 
             if (showFollowsRow) {
                 Spacer(Modifier.height(12.dp))
-
-                // Card 2: Show Follower and Following
                 ToggleCard {
                     PrivacyToggleRow(
                         title = "Show Follower and Following",
                         checked = showFollows,
-                        onCheckedChange = {
-                            showFollows = it
-                            onShowFollowsChanged(it)
-                        }
+                        onCheckedChange = onShowFollowsChanged
                     )
                 }
+            }
+
+            if (isLoading) {
+                Spacer(Modifier.height(16.dp))
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+            if (error != null) {
+                Spacer(Modifier.height(8.dp))
+                Text(error, color = Color(0xFFD32F2F), fontFamily = inter, fontSize = 12.sp)
             }
         }
     }
@@ -190,34 +215,3 @@ Box(Modifier.fillMaxWidth()) {     Text(
     )
 }
 
-/* ---------- Previews ---------- */
-
-@Preview(showBackground = true, backgroundColor = 0xFFF7F7F7)
-@Composable
-private fun PrivacySafety_OneOff_Preview() {
-    MaterialTheme {
-        PrivacyAndSafetyScreen(
-            onBack = {},
-            initialSendMessage = false,
-            initialShowFollows = false,
-            showFollowsRow = false, // فقط یک کارت (مثل شات اول)
-            onSendMessageChanged = {},
-            onShowFollowsChanged = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF)
-@Composable
-private fun PrivacySafety_TwoOn_Preview() {
-    MaterialTheme {
-        PrivacyAndSafetyScreen(
-            onBack = {},
-            initialSendMessage = true,
-            initialShowFollows = true,
-            showFollowsRow = true, // دو کارت (مثل شات دوم)
-            onSendMessageChanged = {},
-            onShowFollowsChanged = {}
-        )
-    }
-}

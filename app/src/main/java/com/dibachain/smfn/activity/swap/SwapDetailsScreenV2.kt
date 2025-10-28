@@ -51,6 +51,8 @@ enum class SwapScreenState {
 /* ----------------- ورودی صِفحه ----------------- */
 
 /* ----------------- صفحه اصلی ----------------- */
+// activity/swap/SwapDetailsScreenV2.kt
+
 @Composable
 fun SwapDetailsScreenV2(
     title: String,
@@ -58,20 +60,28 @@ fun SwapDetailsScreenV2(
     leftIcon: Painter? = null,
     callIcon: Painter? = null,
     moreIcon: Painter? = null,
-
+    errorMessage: String? = null,
+    isActionLoading: Boolean = false,
     userA: SwapUser,
     itemA: SwapItem?,                // ممکن است null (حالت Empty)
     userB: SwapUser,
     itemB: SwapItem,
 
+    // 👇 این چهار تا را اضافه کن تا اطلاعات آیتم طرف مقابل را از بیرون بگیری
+    otherItemTitle: String? = null,
+    otherItemValue: String? = null,
+    otherItemCondition: String? = null,
+    otherItemLocation: String? = null,
+
     onBack: () -> Unit = {},
     onCall: () -> Unit = {},
     onMore: () -> Unit = {},
-    onSelectItem: () -> Unit = {},   // کلیک روی کارت خالی یا لینک «select item»
+    onSelectItem: () -> Unit = {},
     onRequestSwap: () -> Unit = {},
     onAccept: () -> Unit = {},
     onReject: () -> Unit = {},
-    onWriteReview: () -> Unit = {}
+    onWriteReview: () -> Unit = {},
+    contentPadding: PaddingValues = PaddingValues(0.dp)   // 👈 به جای Int
 ) {
     Column(
         modifier = Modifier
@@ -79,31 +89,22 @@ fun SwapDetailsScreenV2(
             .background(PageBg)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 24.dp, vertical = 0.dp)
+            .padding(contentPadding)
     ) {
         TopBar(title, leftIcon, callIcon, moreIcon, onBack, onCall, onMore)
 
         Spacer(Modifier.height(12.dp))
 
-        // بنرهای بالا (Error / Pending message)
-        when (state) {
-            SwapScreenState.Error ->{
-                ErrorBanner("Request failed. Please try again.")
-                Spacer(Modifier.height(12.dp))
-            }
-            else -> {}
+        if (!errorMessage.isNullOrBlank()) {
+            ErrorBanner(errorMessage)
+            Spacer(Modifier.height(12.dp))
         }
 
-        // User A
         UserRow(
             user = userA,
             trailing = {
-                if (itemA != null && state in listOf(
-                        SwapScreenState.Ready,
-                        SwapScreenState.Error
-                    )
-                ) {
-                    // لینک سبز select item
+                if (itemA != null && state in listOf(SwapScreenState.Ready, SwapScreenState.Error)) {
                     SelectItemLink(onSelectItem)
                 }
             }
@@ -112,79 +113,66 @@ fun SwapDetailsScreenV2(
         if (itemA == null) EmptyItemCard(onSelectItem) else ItemCard(itemA.image)
 
         Spacer(Modifier.height(16.dp))
-
         DividerWithLabel("Swap")
-
         Spacer(Modifier.height(14.dp))
 
-        // User B
-        UserRow(
-            user = userB,
-//            trailing = {
-//                if (state == SwapScreenState.Pending) {
-//                    VerifiedDot() // یک دات سبز کوچک کنار آواتار/نام — اختیاری
-//                }
-//            }
-        )
+        UserRow(user = userB)
         Spacer(Modifier.height(10.dp))
-        ItemCard(itemB.image)
+
+        // ⬇️ استفاده از پارامترهای جدید به جای ui.other?.…
+        ItemInfoCard(
+            image = itemB.image,
+            title = otherItemTitle,
+            value = otherItemValue,
+            condition = otherItemCondition,
+            location = otherItemLocation
+        )
 
         Spacer(Modifier.height(18.dp))
 
-        // پیام Pending پایین
-
-
-        // دکمه‌های پایین بر اساس وضعیت
         when (state) {
             SwapScreenState.Empty -> {
                 PrimaryPill(text = "Request Swap", enabled = false, onClick = {})
             }
             SwapScreenState.Ready, SwapScreenState.Error -> {
-                PrimaryPill(text = "Request Swap", enabled = true, onClick = onRequestSwap)
+                // ⏳ لودینگ فقط روی دکمه
+                PrimaryPill(
+                    text = if (isActionLoading) "Please wait..." else "Request Swap",
+                    enabled = !isActionLoading,
+                    onClick = onRequestSwap,
+                    isLoading = isActionLoading
+                )
             }
             SwapScreenState.Pending -> {
                 GreyPill(text = "Request Sent", trailingCheck = true)
             }
             SwapScreenState.IncomingRequest -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    PrimaryPill(
-                        text = "Accept",
-                        enabled = true,
-                        onClick = onAccept,
-                        modifier = Modifier.weight(1f)
-                    )
-                    BlackPill(text = "Reject", onClick = onReject, modifier = Modifier.weight(1f))
+                    PrimaryPill("Accept", true, onAccept, Modifier.weight(1f))
+                    BlackPill("Reject", onReject, Modifier.weight(1f))
                 }
             }
             SwapScreenState.Rejected -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    PrimaryPill(
-                        text = "Accept",
-                        enabled = false,
-                        onClick = {},
-                        modifier = Modifier.weight(1f)
-                    )
-                    RedOutlinePill(text = "Rejected", modifier = Modifier.weight(1f))
+                    PrimaryPill("Accept", false, {}, Modifier.weight(1f))
+                    RedOutlinePill("Rejected", Modifier.weight(1f))
                 }
             }
             SwapScreenState.Accepted -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    GreyPill(text = "Accepted", modifier = Modifier.weight(1f))
-                    PrimaryPill(
-                        text = "Write Review",
-                        enabled = true,
-                        onClick = onWriteReview,
-                        modifier = Modifier.weight(1f)
-                    )
+                    GreyPill("Accepted", modifier = Modifier.weight(1f))
+                    PrimaryPill("Write Review", true, onWriteReview, Modifier.weight(1f))
                 }
             }
         }
+
         if (state == SwapScreenState.Pending) {
             Spacer(Modifier.height(11.dp))
-            PendingRow(text = "Pending ...  Expire in 2 Days")
+            PendingRow("Pending ...  Expire in 2 Days")
         }
     }
 }
+
 
 /* ----------------- اجزای داخلی ----------------- */
 
@@ -370,13 +358,13 @@ private fun PrimaryPill(
     text: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = false     // ⬅️ جدید
 ) {
     val shape = RoundedCornerShape(28.dp)
-
     Button(
         onClick = onClick,
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         shape = shape,
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
@@ -384,33 +372,31 @@ private fun PrimaryPill(
             disabledContentColor = Color(0xFFB7B7B7)
         ),
         contentPadding = PaddingValues(0.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .height(44.dp)
+        modifier = modifier.fillMaxWidth().height(44.dp)
     ) {
-        val brush = if (enabled) AppGradient else SolidColor(Color.Transparent)
-
+        val brush = if (enabled && !isLoading) AppGradient else SolidColor(Color.Transparent)
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(shape)
-                .background(brush = brush),
+            modifier = Modifier.fillMaxSize().clip(shape).background(brush),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = text,
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    lineHeight = 22.4.sp,
-                    fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-                    fontWeight = FontWeight(500),
-                    color = if (enabled) Color.White else  Color(0xFFBCBCBC),
-
-                    ),
+            if (isLoading) {
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            } else {
+                Text(
+                    text = text,
+                    style = TextStyle(
+                        fontSize = 16.sp,
+                        lineHeight = 22.4.sp,
+                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                        fontWeight = FontWeight(500),
+                        color = if (enabled) Color.White else Color(0xFFBCBCBC)
+                    )
                 )
+            }
         }
     }
 }
+
 
 
 @Composable
@@ -485,6 +471,85 @@ private fun RedOutlinePill(text: String, modifier: Modifier = Modifier) {
                 color = Color(0xFFFF0000),
                 )
             )
+    }
+}
+// activity/swap/SwapDetailsScreenV2.kt
+@Composable
+private fun ItemInfoCard(
+    image: Painter,
+    title: String?,
+    value: String?,
+    condition: String?,
+    location: String?
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color.White)
+    ) {
+        // عکس
+        Image(
+            painter = image,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 10f)
+                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
+        )
+        // مشخصات
+//        Column(Modifier.padding(14.dp)) {
+//            if (!title.isNullOrBlank()) {
+//                Text(
+//                    text = title,
+//                    style = TextStyle(
+//                        fontSize = 16.71.sp,
+//                        lineHeight = 23.4.sp,
+//                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+//                        fontWeight = FontWeight(600),
+//                        color = Color(0xFF292D32)
+//                    )
+//                )
+//                Spacer(Modifier.height(6.dp))
+//            }
+//            if (!value.isNullOrBlank()) {
+//                Text(
+//                    text = "Value: $value",
+//                    style = TextStyle(
+//                        fontSize = 14.5.sp,
+//                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+//                        fontWeight = FontWeight(500),
+//                        color = Color(0xFF292D32)
+//                    )
+//                )
+//            }
+//            if (!condition.isNullOrBlank()) {
+//                Spacer(Modifier.height(2.dp))
+//                Text(
+//                    text = "Condition: $condition",
+//                    style = TextStyle(
+//                        fontSize = 14.5.sp,
+//                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+//                        fontWeight = FontWeight(400),
+//                        color = Color(0xFF797B82)
+//                    )
+//                )
+//            }
+//            if (!location.isNullOrBlank()) {
+//                Spacer(Modifier.height(2.dp))
+//                Text(
+//                    text = location,
+//                    style = TextStyle(
+//                        fontSize = 13.5.sp,
+//                        fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+//                        fontWeight = FontWeight(300),
+//                        color = Color(0xFF797B82)
+//                    )
+//                )
+//            }
+//            Spacer(Modifier.height(4.dp))
+//        }
     }
 }
 

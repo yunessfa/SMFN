@@ -1,6 +1,7 @@
 // data/ItemsRepository.kt
 package com.dibachain.smfn.data
 
+import android.util.JsonToken
 import com.dibachain.smfn.common.Result
 import com.dibachain.smfn.core.Public
 import com.dibachain.smfn.data.remote.ItemsApi
@@ -11,7 +12,8 @@ import java.io.IOException
 
 data class ItemLite(
     val id: String,
-    val thumbnail: String
+    val thumbnail: String,
+    val isFavorite: Boolean
 )
 
 class ItemsRepository(private val api: ItemsApi) {
@@ -22,11 +24,12 @@ class ItemsRepository(private val api: ItemsApi) {
     }
 
     suspend fun getActiveItemLites(
+        token: String,
         page: Int? = null,
-        limit: Int? = null
+        limit: Int? = null,
     ): Result<List<ItemLite>> = withContext(Dispatchers.IO) {
         try {
-            val res = api.getAll(page, limit)
+            val res = api.getAll(token,page, limit)
             if (!res.success) return@withContext Result.Error(message = "Failed to load items")
 
             val base = Public.BASE_URL_IMAGE
@@ -34,7 +37,12 @@ class ItemsRepository(private val api: ItemsApi) {
                 .filter { it.status.equals("active", ignoreCase = true) }
                 .mapNotNull { dto ->
                     val thumb = dto.thumbnail ?: return@mapNotNull null
-                    ItemLite(dto._id, thumb.toFullUrl(base))
+                    ItemLite(
+                        dto._id,
+                        thumb.toFullUrl(base),
+                        isFavorite = dto.isFavorite == true        // ← از API
+                    )
+
                 }
                 .toList()
 
@@ -46,5 +54,6 @@ class ItemsRepository(private val api: ItemsApi) {
         } catch (e: Exception) {
             Result.Error(message = e.message ?: "Unexpected error")
         }
+
     }
 }

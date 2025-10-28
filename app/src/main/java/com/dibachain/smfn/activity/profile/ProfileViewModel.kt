@@ -42,9 +42,9 @@ class ProfileViewModel(
                 is Result.Success -> {
                     val data = res.data
                     val isOwnerNow = userId.isNullOrBlank() ||
-                            (!data._id.isNullOrBlank() && data._id == selfId)
+                            (!data.user?._id.isNullOrBlank() && data.user?._id == selfId)
 
-                    if (userId.isNullOrBlank()) selfId = data._id
+                    if (userId.isNullOrBlank()) selfId = data.user?._id
 
                     _state.value = ProfileUiState(
                         loading = false,

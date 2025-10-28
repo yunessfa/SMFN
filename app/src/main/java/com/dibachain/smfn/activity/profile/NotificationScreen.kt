@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -22,6 +25,51 @@ import com.dibachain.smfn.R
 
 /* ---------- Typography ---------- */
 private val inter = FontFamily(Font(R.font.inter_regular))
+@Composable
+fun FollowingRequestRoute(
+    vm: FollowRequestsViewModel,
+    baseImageUrl: String,
+    onBack: () -> Unit,
+    onBell: () -> Unit
+) {
+    val state by vm.state.collectAsState()
+    LaunchedEffect(Unit) { vm.refresh() }
+
+    when {
+        state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(state.error!!)
+        }
+        else -> {
+            val ui = state.requests.map { r ->
+                val painter = coil.compose.rememberAsyncImagePainter(
+                    (r.avatarUrl ?: "").let { if (it.startsWith("http")) it else baseImageUrl.trimEnd('/') + it }
+                )
+                // برای این صفحه عموماً Accept/Delete می‌خوایم → alreadyFollowsYou=false
+                FollowingRequest(
+                    id = r.id,
+                    avatar = painter,
+                    name = r.name,
+                    alreadyFollowsYou = r.followsYou
+                )
+            }
+            FollowingRequestScreen1(
+                items = ui,
+                onBack = onBack,
+                onBell = onBell,
+                onAccept = { req -> vm.accept(req.id) },
+                onDelete = { req -> vm.reject(req.id) },
+                onFollowBack = { req ->
+                    // نیاز به fromUserId داریم → آن را از state پیدا می‌کنیم:
+                    val fromId = state.requests.firstOrNull { it.id == req.id }?.fromUserId
+                    if (fromId != null) vm.followBack(fromId)
+                }
+            )
+        }
+    }
+}
 
 /* ---------- Screen ---------- */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,12 +81,13 @@ fun NotificationScreen(
     onSwapActivity: () -> Unit
 ) {
     Scaffold(
+        containerColor = Color.White,       // ← پس‌زمینه‌ی خود اسکیفولد سفید
         topBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(top = 32.dp, bottom = 10.dp),
+                    .padding(top = 64.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

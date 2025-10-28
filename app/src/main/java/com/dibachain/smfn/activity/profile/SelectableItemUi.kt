@@ -57,12 +57,14 @@ fun SelectItemsForCollectionScreen(
     }
 
     Scaffold(
+containerColor = Color.White,
+        modifier = Modifier.background(Color(0xFFFFFFFF)),
         topBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(top = 32.dp, bottom = 24.dp),
+                    .padding(top = 64.dp, bottom = 24.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {

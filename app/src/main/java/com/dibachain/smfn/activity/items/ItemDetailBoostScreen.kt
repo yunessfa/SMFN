@@ -2,11 +2,13 @@ package com.dibachain.smfn.activity.items
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -123,7 +126,8 @@ fun ItemDetailBoostScreen(
                     staricon = painterResource(R.drawable.ic_star_items),
                     ratingText = sellerRatingText,
                     location = sellerLocation,
-                    onClick = { /* goto profile */ }
+                    onClick = { /* goto profile */ },
+                    ownerId = ""
                 )
 
                 Spacer(Modifier.height(16.dp))
@@ -198,20 +202,20 @@ fun ItemDetailBoostScreen(
                 )
 
                 Spacer(Modifier.height(16.dp))
-                if (showBoostSheet) {
-                    BoostItemSheet(
-                        sellerName = sellerName,
-                        sellerLocation = sellerLocation,
-                        // موجودی کاربر (دمویی): بعداً از ولت بیاور
-                        balanceSmfn = 120_000,              // ← تغییر بده
-                        onDismiss = { showBoostSheet = false },
-                        onGoWallet = { onOpenWallet() },
-                        onBoost = { views, costSmfn, costUsd ->
-                            // TODO: API Boost
-                            showBoostSheet = false
-                        }
-                    )
-                }
+//                if (showBoostSheet) {
+//                    BoostItemSheet(
+//                        sellerName = sellerName,
+//                        sellerLocation = sellerLocation,
+//
+//                        balanceSmfn = 120_000,              // ← تغییر بده
+//                        onDismiss = { showBoostSheet = false },
+//                        onGoWallet = { onOpenWallet() },
+//                        onBoost = { views, costSmfn, costUsd ->
+//                            // TODO: API Boost
+//                            showBoostSheet = false
+//                        }
+//                    )
+//                }
             }
         }
     }
@@ -219,8 +223,9 @@ fun ItemDetailBoostScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoostItemSheet(
-    sellerName: String,
-    sellerLocation: String,
+    sellerAvatar: Painter,
+    sellerName: String?,
+    sellerLocation: String?,
     balanceSmfn: Long,                        // موجودی فعلی کاربر
     onDismiss: () -> Unit,
     onGoWallet: () -> Unit,
@@ -234,6 +239,7 @@ fun BoostItemSheet(
         contentWindowInsets = { WindowInsets(0) }
     ) {
         BoostItemSheetBody(
+            sellerAvatar=sellerAvatar,
             sellerName = sellerName,
             sellerLocation = sellerLocation,
             balanceSmfn = balanceSmfn,
@@ -245,9 +251,10 @@ fun BoostItemSheet(
 }
 @Composable
 private fun BoostItemSheetBody(
-    sellerName: String,
-    sellerLocation: String,
+    sellerName: String?,
+    sellerLocation: String?,
     balanceSmfn: Long,
+    sellerAvatar: Painter,
     onDismiss: () -> Unit,
     onGoWallet: () -> Unit,
     onBoost: (views: Long, costSmfn: Long, costUsd: Float) -> Unit
@@ -291,28 +298,30 @@ private fun BoostItemSheetBody(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(painterResource(R.drawable.ic_avatar), null, tint = Color.Unspecified,
-                modifier = Modifier
-                .width(53.dp)
-                .height(53.dp))
+            Image(painter =sellerAvatar, contentDescription = null, modifier = Modifier.size(53.dp).clip(
+                CircleShape
+            ))
+
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(sellerName,
-                        style = TextStyle(
-                            fontSize = 16.71.sp,
-                            lineHeight = 23.4.sp,
-                            fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
-                            fontWeight = FontWeight(600),
-                            color = Color(0xFF292D32),
+                    if (sellerName != null) {
+                        Text(sellerName,
+                            style = TextStyle(
+                                fontSize = 16.71.sp,
+                                lineHeight = 23.4.sp,
+                                fontFamily = FontFamily(Font(R.font.plus_jakarta_sans)),
+                                fontWeight = FontWeight(600),
+                                color = Color(0xFF292D32),
                             )
                         )
+                    }
                     Spacer(Modifier.width(6.dp))
-                    Icon(painterResource(R.drawable.ic_verify), null, tint = Color.Unspecified,
-                        modifier = Modifier
-                            .width(18.dp)
-                            .height(18.dp)
-                        )
+//                    Icon(painterResource(R.drawable.ic_verify), null, tint = Color.Unspecified,
+//                        modifier = Modifier
+//                            .width(18.dp)
+//                            .height(18.dp)
+//                        )
                     Spacer(Modifier.width(6.dp))
                     Icon(painterResource(R.drawable.ic_star_items), null, tint = Color.Unspecified,
                         modifier = Modifier
@@ -329,15 +338,17 @@ private fun BoostItemSheetBody(
                         ))
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(sellerLocation,
-                    style = TextStyle(
-                        fontSize = 10.59.sp,
-                        lineHeight = 12.59.sp,
-                        fontFamily = FontFamily(Font(R.font.inter_medium)),
-                        fontWeight = FontWeight(500),
-                        color = Color(0xFFAAAAAA),
+                if (sellerLocation != null) {
+                    Text(sellerLocation,
+                        style = TextStyle(
+                            fontSize = 10.59.sp,
+                            lineHeight = 12.59.sp,
+                            fontFamily = FontFamily(Font(R.font.inter_medium)),
+                            fontWeight = FontWeight(500),
+                            color = Color(0xFFAAAAAA),
+                        )
                     )
-                    )
+                }
             }
         }
 

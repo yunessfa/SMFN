@@ -322,7 +322,7 @@ class ProfileStepperViewModel(
         }
     }
 
-    fun submitInterestsToServer(onRequirePremium: () -> Unit) = viewModelScope.launch {
+    fun submitInterestsToServer() = viewModelScope.launch {
         val ids = _ui.value.interests
         if (ids.size < 4) {
             _events.send(ProfileEvent.Toast("Select at least 4"))
@@ -333,7 +333,9 @@ class ProfileStepperViewModel(
             _ui.update { it.copy(loading = false) }
             _events.send(ProfileEvent.Toast("No token")); return@launch
         }
+//        _events.send(ProfileEvent.Toast("intersted ${ids}"));
         when (val r = catRepo.setInterests(token, ids)) {
+
             is Result.Success -> {
                 store.saveInterests(ids)
                 _ui.update { it.copy(loading = false) }
@@ -343,8 +345,9 @@ class ProfileStepperViewModel(
             is Result.Error -> {
                 _ui.update { it.copy(loading = false) }
                 if (r.code == 402) {
+                    _events.send(ProfileEvent.Toast("402 ${r.message}"));
+
                     // Premium required (مطابق اسکرین‌شات 402)
-                    onRequirePremium()
                 } else {
                     _events.send(ProfileEvent.Toast(r.message))
                 }
